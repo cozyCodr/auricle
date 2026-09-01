@@ -1,0 +1,62 @@
+/* Auricle — global stylesheet
+   Design tokens (custom properties) + base document styles.
+   High-contrast, hyperlegible. Single data hue, warm paper background. */
+
+:root {
+  /* Palette */
+  --bg: #fdfcf8;              /* page background */
+  --ink: #1a1a1a;            /* primary text / 2px borders */
+  --muted: #55524c;         /* secondary text */
+  --faint: #6f6b62;         /* captions — deliberately darkened for contrast */
+  --data-blue: #2f5fa3;     /* single data hue */
+  --gold-band: rgba(214, 154, 30, 0.18); /* highlight fill */
+  --gold-ink: #8a5a00;      /* highlight text / accents */
+  --red-accent: #8a1c0f;    /* live indicator */
+  --surface: #ffffff;       /* card surfaces */
+  --surface-alt: #f7f4ec;   /* rail surface */
+  --border-soft: #d8d4c8;
+
+  /* Type */
+  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+
+  color-scheme: light;
+  color: var(--ink);
+  background: var(--bg);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100svh;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+#root {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: var(--gold-ink);
+}
+a:hover {
+  color: #6b4600;
+}

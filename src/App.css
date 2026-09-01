@@ -1,0 +1,121 @@
+/* Auricle — app layout and header */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+/* ---- Header ---- */
+.app-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 74px;
+  padding: 12px 30px;
+  border-bottom: 2px solid var(--ink);
+  background: var(--bg);
+  flex-wrap: wrap;
+}
+
+.app-header__mark {
+  flex-shrink: 0;
+  color: var(--ink);
+  display: block;
+}
+
+.app-header__titles {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.app-header__name {
+  font-weight: 700;
+  font-size: 23px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.app-header__tagline {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.app-header__pill {
+  font-size: 12px;
+  background: #efece3;
+  border-radius: 99px;
+  padding: 5px 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.app-header__status {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 99px;
+  padding: 8px 16px;
+}
+
+.app-header__status-label {
+  font-size: 13.5px;
+  font-weight: 700;
+}
+
+.app-header__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.app-header__bars span {
+  width: 3px;
+  background: var(--red-accent);
+  border-radius: 2px;
+}
+
+/* ---- Main placeholder ---- */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 30px;
+}
+
+.app-main__placeholder {
+  max-width: 520px;
+  text-align: center;
+  color: var(--faint);
+}
+
+.app-main__placeholder h2 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.app-main__placeholder p {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.app-main__placeholder code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 2px 6px;
+  color: var(--gold-ink);
+}
