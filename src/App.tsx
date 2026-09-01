@@ -1,9 +1,12 @@
-import { useSyncExternalStore } from 'react'
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import './App.css'
 import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
 import { ChartCard, useChartHighlight } from './charts'
 import { Rail } from './rail/Rail'
 import { subscribeAudio, isAudioReady, armAudio } from './sonify'
+import { createVoice, isVoiceSupported, type VoiceState } from './voice'
+import { setQuestion } from './rail/conversation'
+import { runIntent } from './voice/intents'
 
 /** Live view of whether Web Audio has been armed (a user gesture resumed it). */
 function useAudioReady(): boolean {
@@ -34,6 +37,95 @@ function EnableSoundButton() {
           <span aria-hidden="true">♪</span> Enable sound
         </>
       )}
+    </button>
+  )
+}
+
+/** Five decorative level bars; they animate only while listening (CSS-driven). */
+function LevelBars() {
+  return (
+    <span className="app-header__bars" aria-hidden="true">
+      <span />
+      <span />
+      <span />
+      <span />
+      <span />
+    </span>
+  )
+}
+
+/**
+ * The header push-to-talk mic (Web Speech). Click to start, click to stop; a
+ * finished utterance lands as the conversation's question and then runs the
+ * local demo-intent matcher (which drives the SAME WebMCP tools an external
+ * agent would, when `document.modelContext` is present).
+ *
+ * Feature-detected: renders NOTHING on browsers without Web Speech, so the app
+ * stays fully usable. Idle reads "Ask by voice" (never claims it's listening);
+ * active reads "Listening…" with animated bars (stilled by reduced-motion).
+ */
+function VoiceMic() {
+  // Feature-detect once. Hidden entirely where Web Speech is unavailable.
+  const supported = useMemo(() => isVoiceSupported(), [])
+  const [state, setState] = useState<VoiceState>('idle')
+  const [interim, setInterim] = useState('')
+
+  const voice = useRef<ReturnType<typeof createVoice> | null>(null)
+  if (supported && !voice.current) {
+    voice.current = createVoice({
+      onStateChange: setState,
+      onInterim: (t) => setInterim(t),
+      onFinal: (transcript) => {
+        setInterim('')
+        setQuestion(transcript) // the question bubble renders this reactively
+        void runIntent(transcript) // demo mode: fire the matching WebMCP tool(s)
+      },
+    })
+  }
+
+  if (!supported) return null
+
+  const listening = state === 'listening'
+  const denied = state === 'denied'
+  const label = denied
+    ? 'Mic blocked'
+    : listening
+      ? 'Listening…'
+      : state === 'error'
+        ? 'Try again'
+        : 'Ask by voice'
+  const aria = listening ? 'Stop voice input' : 'Start voice input'
+  const title = denied
+    ? 'Microphone permission was blocked — enable it in the browser site settings, then click again.'
+    : 'Push to talk: click to start, click to stop. Your question appears in the conversation.'
+
+  return (
+    <button
+      type="button"
+      className={`app-header__status app-header__voice${listening ? ' app-header__voice--active' : ''}${denied ? ' app-header__voice--denied' : ''}`}
+      aria-pressed={listening}
+      aria-label={aria}
+      title={title}
+      onClick={() => voice.current?.toggle()}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke={listening ? 'var(--red-accent)' : 'currentColor'}
+        strokeWidth="2"
+        strokeLinecap="round"
+        aria-hidden="true"
+      >
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0" />
+        <path d="M12 18v3" />
+      </svg>
+      <span className="app-header__status-label">
+        {listening && interim ? interim : label}
+      </span>
+      <LevelBars />
     </button>
   )
 }
@@ -87,30 +179,7 @@ function App() {
 
         <div className="app-header__pill">Zambia · open data 2015–2025</div>
 
-        <div className="app-header__status">
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="var(--red-accent)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            aria-hidden="true"
-          >
-            <rect x="9" y="3" width="6" height="11" rx="3" />
-            <path d="M5 11a7 7 0 0 0 14 0" />
-            <path d="M12 18v3" />
-          </svg>
-          <span className="app-header__status-label">Listening</span>
-          <span className="app-header__bars" aria-hidden="true">
-            <span style={{ height: '6px' }} />
-            <span style={{ height: '12px' }} />
-            <span style={{ height: '8px' }} />
-            <span style={{ height: '13px' }} />
-            <span style={{ height: '5px' }} />
-          </span>
-        </div>
+        <VoiceMic />
 
         <EnableSoundButton />
       </header>

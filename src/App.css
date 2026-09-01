@@ -92,8 +92,87 @@
 
 .app-header__bars span {
   width: 3px;
+  height: 40%;
   background: var(--red-accent);
   border-radius: 2px;
+}
+
+/* ---- Voice mic (push-to-talk) — the functional "Listening" pill ---- */
+/* Reuses .app-header__status shape but is a real <button>. */
+button.app-header__voice {
+  margin-left: auto;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.app-header__voice .app-header__status-label {
+  min-width: 84px;
+  text-align: left;
+  /* Interim transcript can be long; keep the header from jumping around. */
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header__voice:hover {
+  background: var(--surface-alt);
+}
+
+.app-header__voice:focus-visible {
+  outline: 3px solid var(--ink);
+  outline-offset: 2px;
+}
+
+/* Idle: bars sit still and muted so the pill doesn't claim it's listening. */
+.app-header__voice:not(.app-header__voice--active) .app-header__bars span {
+  background: var(--border-soft);
+  height: 30%;
+}
+
+/* Active: red border + animated level bars. */
+.app-header__voice--active {
+  border-color: var(--red-accent);
+  background: var(--surface-alt);
+}
+
+.app-header__voice--active .app-header__bars span {
+  animation: voice-bar 0.9s ease-in-out infinite;
+}
+.app-header__voice--active .app-header__bars span:nth-child(1) {
+  animation-delay: 0s;
+}
+.app-header__voice--active .app-header__bars span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.app-header__voice--active .app-header__bars span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+.app-header__voice--active .app-header__bars span:nth-child(4) {
+  animation-delay: 0.45s;
+}
+.app-header__voice--active .app-header__bars span:nth-child(5) {
+  animation-delay: 0.6s;
+}
+
+.app-header__voice--denied {
+  border-color: var(--border-soft);
+  color: var(--muted);
+}
+
+@keyframes voice-bar {
+  0%,
+  100% {
+    height: 25%;
+  }
+  50% {
+    height: 100%;
+  }
 }
 
 /* "Enable sound" — the audio-arming gesture (near the Listening pill). */
@@ -858,5 +937,14 @@
   .rail-sonify span {
     animation: none;
     height: 60%;
+  }
+  /* Voice mic: don't animate the level bars; a static raised state signals
+     "listening" instead of motion. */
+  .app-header__voice--active .app-header__bars span {
+    animation: none;
+    height: 70%;
+  }
+  button.app-header__voice {
+    transition: none;
   }
 }
