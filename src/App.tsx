@@ -1,4 +1,102 @@
 import './App.css'
+// TEMP: 2.1 verification harness — replaced by real tools in 2.2
+import { useState } from 'react'
+import {
+  registry,
+  useAgentAvailable,
+  useMirror,
+  useSurface,
+  useToolLog,
+} from './lib/agent-a11y'
+import type { SurfaceDef } from './lib/agent-a11y'
+
+// TEMP: 2.1 verification harness — a global orientation tool + two surface
+// families, plus focus buttons, so a WebMCP Chrome can confirm getTools()
+// shows globals + only the focused family. Removed/rebuilt in 2.2 and 3.2.
+const objectSchema = { type: 'object', properties: {} }
+
+const maizeSurface: SurfaceDef = {
+  describe: 'Maize retail price, monthly, Zambia.',
+  tools: [
+    {
+      name: 'maize_summary',
+      description: 'Summarise the maize price trend.',
+      inputSchema: objectSchema,
+      execute: () => ({
+        speech: 'Maize rose 41% over the window, from K95 to K134.',
+        mirror: { kind: 'highlight-range', chartId: 'maize', start: '2022-01', end: '2024-12' },
+      }),
+    },
+  ],
+}
+
+const mortalitySurface: SurfaceDef = {
+  describe: 'Under-5 mortality per 1,000 live births, yearly.',
+  tools: [
+    {
+      name: 'mortality_summary',
+      description: 'Summarise the under-5 mortality trend.',
+      inputSchema: objectSchema,
+      execute: () => ({ speech: 'Under-5 mortality fell 38% across the decade.' }),
+    },
+  ],
+}
+
+// Register the always-on orientation tool once, at module load.
+registry.registerGlobal({
+  name: 'describe_screen',
+  description: 'Describe what is on screen and which chart is focused.',
+  inputSchema: objectSchema,
+  execute: () => ({
+    speech: `Auricle shows Zambian open data. Focused surface: ${registry.focused ?? 'none'}.`,
+  }),
+})
+
+function AgentHarness() {
+  const available = useAgentAvailable()
+  const log = useToolLog()
+  const [lastMirror, setLastMirror] = useState<string>('—')
+  useMirror((e) => setLastMirror(JSON.stringify(e)))
+  useSurface('maize', maizeSurface)
+  useSurface('mortality', mortalitySurface)
+
+  return (
+    <section
+      style={{
+        margin: '16px',
+        padding: '16px',
+        border: '2px dashed var(--red-accent, #c0392b)',
+        borderRadius: '8px',
+        fontFamily: 'system-ui, sans-serif',
+      }}
+    >
+      <strong>TEMP 2.1 harness</strong> — WebMCP:{' '}
+      <code>{available ? 'available' : 'absent (no-op)'}</code>
+      <div style={{ display: 'flex', gap: '8px', margin: '8px 0' }}>
+        <button type="button" onClick={() => registry.focus('maize')}>
+          focus maize
+        </button>
+        <button type="button" onClick={() => registry.focus('mortality')}>
+          focus mortality
+        </button>
+        <button type="button" onClick={() => registry.blur()}>
+          blur
+        </button>
+      </div>
+      <div>
+        last mirror: <code>{lastMirror}</code>
+      </div>
+      <div>tool log ({log.length}):</div>
+      <ul>
+        {log.map((entry, i) => (
+          <li key={i}>
+            <code>{entry.argsSummary}</code> → {entry.speech}
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 /**
  * Auricle — the dashboard you can interview.
@@ -62,6 +160,8 @@ function App() {
       </header>
 
       <main className="app-main">
+        {/* TEMP: 2.1 verification harness — replaced by real tools in 2.2 */}
+        <AgentHarness />
         <div className="app-main__placeholder">
           <h2>Charts land here</h2>
           <p>
