@@ -15,6 +15,7 @@
 import { registry, type ToolDef } from '../lib/agent-a11y'
 import { CHARTS, CHART_IDS, getChart } from './charts.ts'
 import { toolCountFor, toolNamesFor } from './surfaces.ts'
+import { setFocus } from './focus.ts'
 
 const EMPTY_OBJECT_SCHEMA = { type: 'object', properties: {} } as const
 
@@ -123,7 +124,10 @@ const focusChart: ToolDef = {
         data: { ok: false, validIds: CHART_IDS },
       }
     }
-    registry.focus(chartId)
+    // Route through the reactive focus controller (not registry.focus directly)
+    // so agent-driven focus also updates the UI. setFocus calls registry.focus
+    // under the hood, so the tool family still swaps.
+    setFocus(chartId)
     const names = toolNamesFor(chartId)
     const speech =
       `Focused ${chart.title}. ${names.length} tool${names.length === 1 ? '' : 's'} ` +

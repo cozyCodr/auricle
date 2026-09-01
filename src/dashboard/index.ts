@@ -30,5 +30,7 @@ export function registerDashboard(): void {
 }
 
 export { CHARTS, getChart } from './charts.ts'
+export type { ChartMeta } from './charts.ts'
 export { registerOrientationTools } from './orientation.ts'
 export { CHART_SURFACES, toolNamesFor, toolCountFor } from './surfaces.ts'
+export { setFocus, getFocus, initFocus, useFocusedChart, DEFAULT_FOCUS } from './focus.ts'
