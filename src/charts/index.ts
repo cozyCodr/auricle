@@ -29,3 +29,13 @@ export type {
 } from './types.ts'
 
 export { monthIndexOf, maizePeak, maizeDemoHighlight, tableFor } from './data.ts'
+export { useChartHighlight } from './useHighlight.ts'
+export {
+  asHighlightEvent,
+  lineHighlightFromMirror,
+  hlPoint,
+  hlRange,
+  barEmphasis,
+  scatterRing,
+} from './highlight.ts'
+export type { MirrorHighlightEvent } from './highlight.ts'

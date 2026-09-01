@@ -15,6 +15,10 @@ export interface ScatterChartProps {
   variant?: ChartVariant
   xAxisLabel?: string
   yAxisLabel?: string
+  /** Mirror-driven: gold ring + dark tooltip on the dot whose label matches (3.2). */
+  ringLabelMatch?: string
+  ringLabel?: string
+  ringDetail?: string
 }
 
 const HERO = { w: 980, h: 250, top: 18, right: 24, bottom: 44, left: 58 }
@@ -26,6 +30,9 @@ export function ScatterChart({
   variant = 'small',
   xAxisLabel,
   yAxisLabel,
+  ringLabelMatch,
+  ringLabel,
+  ringDetail,
 }: ScatterChartProps) {
   const hero = variant === 'hero'
   const box = hero ? HERO : SMALL
@@ -66,6 +73,37 @@ export function ScatterChart({
           <title>{`${p.label}: ${p.x} → ${p.y}`}</title>
         </circle>
       ))}
+
+      {/* Mirror-driven ring + dark tooltip on the matched dot (3.2) */}
+      {ringLabelMatch != null && (() => {
+        const p = points.find((pt) => pt.label === ringLabelMatch)
+        if (!p) return null
+        const px = sx(p.x)
+        const py = sy(p.y)
+        const tw = hero ? 210 : 140
+        const th = hero ? (ringDetail ? 40 : 24) : ringDetail ? 32 : 20
+        const flip = px + 16 + tw > plotR
+        const bx = flip ? px - 14 - tw : px + 14
+        const by = Math.max(plotT + 2, py - th - 10)
+        return (
+          <g>
+            <circle cx={px} cy={py} r={hero ? 11 : 8} fill="none" stroke="var(--gold-ink)" strokeWidth={hero ? 3 : 2} />
+            {ringLabel && (
+              <g>
+                <rect x={bx} y={by} width={tw} height={th} rx={7} fill="var(--ink)" />
+                <text x={bx + 12} y={by + (hero ? 17 : 14)} fontFamily="var(--font-body)" fontSize={hero ? 13 : 11} fontWeight={700} fill="var(--bg)">
+                  {ringLabel}
+                </text>
+                {ringDetail && (
+                  <text x={bx + 12} y={by + (hero ? 33 : 27)} fontFamily="var(--font-body)" fontSize={hero ? 12 : 10} fill="#e8c778">
+                    {ringDetail}
+                  </text>
+                )}
+              </g>
+            )}
+          </g>
+        )
+      })()}
 
       {hero && xAxisLabel && (
         <text x={(plotL + plotR) / 2} y={box.h - 8} className="scatter__axis-title" textAnchor="middle">

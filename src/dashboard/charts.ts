@@ -103,26 +103,26 @@ const MONTHS = [
 ] as const
 
 /** "2025-01" → "Jan 2025"; "2025-01" or "2025-01-15" both supported. */
-function fmtMonth(ym: string): string {
+export function fmtMonth(ym: string): string {
   const [y, m] = ym.split('-')
   const idx = Number(m) - 1
   return `${MONTHS[idx] ?? m} ${y}`
 }
 
 /** Round to n decimals and drop trailing zeros (12.10 → "12.1", 5.6 → "5.6"). */
-function round(value: number, decimals = 2): string {
+export function round(value: number, decimals = 2): string {
   return Number(value.toFixed(decimals)).toString()
 }
 
-function minBy<T>(items: readonly T[], key: (t: T) => number): T {
+export function minBy<T>(items: readonly T[], key: (t: T) => number): T {
   return items.reduce((best, cur) => (key(cur) < key(best) ? cur : best))
 }
-function maxBy<T>(items: readonly T[], key: (t: T) => number): T {
+export function maxBy<T>(items: readonly T[], key: (t: T) => number): T {
   return items.reduce((best, cur) => (key(cur) > key(best) ? cur : best))
 }
 
 /** Pearson correlation of paired (x, y) samples. */
-function pearson(xs: readonly number[], ys: readonly number[]): number {
+export function pearson(xs: readonly number[], ys: readonly number[]): number {
   const n = xs.length
   const mx = xs.reduce((a, b) => a + b, 0) / n
   const my = ys.reduce((a, b) => a + b, 0) / n

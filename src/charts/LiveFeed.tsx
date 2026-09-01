@@ -20,6 +20,9 @@ export interface LiveFeedProps {
   simulated?: boolean
   variant?: ChartVariant
   formatValue?: (v: number) => string
+  /** Mirror-driven: a dark "answer" pill (label + detail) shown when a tool replies (3.2). */
+  answerLabel?: string
+  answerDetail?: string
 }
 
 const HERO = { w: 980, h: 130 }
@@ -34,6 +37,8 @@ export function LiveFeed({
   simulated = true,
   variant = 'small',
   formatValue = (v) => v.toFixed(2),
+  answerLabel,
+  answerDetail,
 }: LiveFeedProps) {
   const hero = variant === 'hero'
   const box = hero ? HERO : SMALL
@@ -57,6 +62,39 @@ export function LiveFeed({
           LIVE
         </span>
       </div>
+
+      {/* Mirror-driven answer pill: dark box with the tool's spoken figure (3.2) */}
+      {answerLabel != null && (
+        <div
+          role="status"
+          style={{
+            display: 'inline-flex',
+            flexDirection: 'column',
+            alignSelf: 'flex-start',
+            gap: 1,
+            marginTop: hero ? 8 : 4,
+            padding: hero ? '6px 12px' : '3px 8px',
+            borderRadius: 8,
+            background: 'var(--ink)',
+          }}
+        >
+          <span
+            style={{
+              fontFamily: 'var(--font-body)',
+              fontWeight: 700,
+              fontSize: hero ? 14 : 11,
+              color: 'var(--bg)',
+            }}
+          >
+            {answerLabel}
+          </span>
+          {answerDetail && (
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: hero ? 12 : 10, color: '#e8c778' }}>
+              {answerDetail}
+            </span>
+          )}
+        </div>
+      )}
 
       <svg
         className="livefeed__spark"

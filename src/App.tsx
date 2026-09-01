@@ -1,6 +1,6 @@
 import './App.css'
 import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
-import { ChartCard, maizeDemoHighlight } from './charts'
+import { ChartCard, useChartHighlight } from './charts'
 
 // Register the agent layer once, at module load: the three global orientation
 // tools + a focusable surface per chart. Then sync the registry to the default
@@ -21,6 +21,8 @@ function App() {
   const focusedId = useFocusedChart() ?? DEFAULT_FOCUS
   const heroChart = getChart(focusedId) ?? CHARTS[0]
   const others = CHARTS.filter((c) => c.id !== heroChart.id)
+  // Mirror-driven: the focused chart's live highlight, painted on the hero.
+  const highlight = useChartHighlight(heroChart.id)
 
   return (
     <div className="app">
@@ -80,12 +82,7 @@ function App() {
 
         {/* Charts column */}
         <div className="charts-col">
-          <ChartCard
-            chart={heroChart}
-            variant="hero"
-            onFocus={setFocus}
-            highlight={heroChart.id === 'maize-prices' ? maizeDemoHighlight : undefined}
-          />
+          <ChartCard chart={heroChart} variant="hero" onFocus={setFocus} highlight={highlight} />
 
           <div className="charts-row" role="list" aria-label="Other charts — click to focus">
             {others.map((c) => (

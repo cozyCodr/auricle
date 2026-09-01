@@ -15,7 +15,8 @@
 import { useId, useState } from 'react'
 import type { ChartMeta } from '../dashboard/charts.ts'
 import { toolNamesFor, toolCountFor } from '../dashboard/surfaces.ts'
-import type { ChartVariant, LineHighlight } from './types.ts'
+import type { ChartVariant } from './types.ts'
+import type { MirrorHighlightEvent } from './highlight.ts'
 import { ChartFigure } from './ChartFigure.tsx'
 import { DataTable } from './DataTable.tsx'
 import { tableFor } from './data.ts'
@@ -24,7 +25,7 @@ interface ChartCardProps {
   chart: ChartMeta
   variant: ChartVariant
   onFocus: (id: string) => void
-  highlight?: LineHighlight
+  highlight?: MirrorHighlightEvent
 }
 
 /** The live tool-family chips shown on the focused hero card. */

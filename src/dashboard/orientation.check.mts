@@ -93,21 +93,23 @@ async function main() {
     assert.ok(list.includes(id), `list_visualizations mentions ${id}`)
   }
 
-  // focus_chart(maize-prices) → globals + maize family.
+  // focus_chart(maize-prices) → globals + maize family (3.2 expanded the family).
+  const maizeFamilyNames = CHART_SURFACES['maize-prices'].tools.map((t) => t.name)
   const maizeSpeech = await exec('focus_chart', { chart_id: 'maize-prices' })
   assert.ok(maizeSpeech.startsWith('Focused Maize meal retail price.'), 'focus speech names maize')
   assert.deepEqual(
     await toolNames(),
-    [...GLOBALS, 'maize-prices_describe_trend'].sort(),
+    [...GLOBALS, ...maizeFamilyNames].sort(),
     'focus(maize): globals + maize family',
   )
 
   // focus_chart(under5-mortality) → maize family gone, mortality present, globals intact.
+  const mortalityFamilyNames = CHART_SURFACES['under5-mortality'].tools.map((t) => t.name)
   await exec('focus_chart', { chart_id: 'under5-mortality' })
   const afterSwap = await toolNames()
   assert.deepEqual(
     afterSwap,
-    [...GLOBALS, 'under5-mortality_describe_trend'].sort(),
+    [...GLOBALS, ...mortalityFamilyNames].sort(),
     'focus(under5): globals + mortality family only',
   )
   assert.ok(!afterSwap.includes('maize-prices_describe_trend'), 'maize family unregistered after swap')

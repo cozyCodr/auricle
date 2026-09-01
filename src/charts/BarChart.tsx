@@ -16,6 +16,9 @@ export interface BarChartProps {
   variant?: ChartVariant
   /** Format a value for the emphasized bar's inline label. Default: rounded to 1 dp. */
   formatValue?: (v: number) => string
+  /** Mirror-driven: gold ring + dark tooltip on the bar whose label matches (3.2). */
+  emphasisLabel?: string
+  emphasisDetail?: string
 }
 
 const HERO = { w: 980, h: 250, top: 20, bottom: 44, side: 24 }
@@ -26,6 +29,8 @@ export function BarChart({
   ariaLabel,
   variant = 'small',
   formatValue = (v) => (Math.abs(v) >= 100 ? Math.round(v).toString() : v.toFixed(1)),
+  emphasisLabel,
+  emphasisDetail,
 }: BarChartProps) {
   const hero = variant === 'hero'
   const box = hero ? HERO : SMALL
@@ -83,6 +88,61 @@ export function BarChart({
           </g>
         )
       })}
+
+      {/* Mirror-driven emphasis: gold ring + dark tooltip on the named bar (3.2) */}
+      {emphasisLabel != null && (() => {
+        const idx = data.findIndex((d) => d.label === emphasisLabel)
+        if (idx < 0) return null
+        const d = data[idx]
+        const x = box.side + idx * (bw + gap)
+        const y = sy(d.value)
+        const h = Math.max(0, plotB - y)
+        const tw = hero ? 168 : 120
+        const th = hero ? (emphasisDetail ? 40 : 24) : emphasisDetail ? 32 : 20
+        const cx = x + bw / 2
+        const flipR = cx + tw / 2 > box.w - box.side
+        const flipL = cx - tw / 2 < box.side
+        const bx = flipR ? box.w - box.side - tw : flipL ? box.side : cx - tw / 2
+        const by = Math.max(2, y - th - 8)
+        return (
+          <g>
+            <rect
+              x={x - 3}
+              y={y - 3}
+              width={bw + 6}
+              height={h + 3}
+              rx={hero ? 6 : 5}
+              fill="none"
+              stroke="var(--gold-ink)"
+              strokeWidth={hero ? 3 : 2}
+            />
+            <rect x={bx} y={by} width={tw} height={th} rx={7} fill="var(--ink)" />
+            <text
+              x={bx + 11}
+              y={by + (hero ? 17 : 14)}
+              fontFamily="var(--font-body)"
+              fontSize={hero ? 13 : 11}
+              fontWeight={700}
+              fill="var(--bg)"
+            >
+              {emphasisLabel}
+              {' '}
+              {formatValue(d.value)}
+            </text>
+            {emphasisDetail && (
+              <text
+                x={bx + 11}
+                y={by + (hero ? 33 : 27)}
+                fontFamily="var(--font-body)"
+                fontSize={hero ? 12 : 10}
+                fill="#e8c778"
+              >
+                {emphasisDetail}
+              </text>
+            )}
+          </g>
+        )
+      })()}
     </svg>
   )
 }
