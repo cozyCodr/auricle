@@ -6,8 +6,11 @@
  * Craft: single data hue for the sparkline, mono figures in ink, muted caption.
  */
 
+import { useMemo } from 'react'
 import type { LinePoint, ChartVariant } from './types.ts'
 import { linScale, yBounds, xBounds, buildPath } from './scale.ts'
+import { useLiveFeed } from '../dashboard/liveFeed.ts'
+import { fxLine } from './data.ts'
 
 export interface LiveFeedProps {
   /** The big headline number (latest close). Kept separate so 4.3 can tick it. */
@@ -115,5 +118,51 @@ export function LiveFeed({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * ExchangeLiveFeed — the exchange-rate card, driven by the ticking session store
+ * (4.3). The big figure and the sparkline update every ~5s: the sparkline is the
+ * real baseline closes followed by this session's simulated ticks. This is where
+ * the "live" of the live feed actually lives; the pure {@link LiveFeed} stays
+ * presentational so it's reusable and testable.
+ */
+export function ExchangeLiveFeed({
+  variant,
+  ariaLabel,
+  answerLabel,
+  answerDetail,
+}: {
+  variant: ChartVariant
+  ariaLabel: string
+  answerLabel?: string
+  answerDetail?: string
+}) {
+  const live = useLiveFeed()
+  const series = useMemo<LinePoint[]>(() => {
+    const baseLastX = fxLine.length ? fxLine[fxLine.length - 1].x : 0
+    // buffer[0] is the seed (== baseline's last close), so skip it to avoid a dup.
+    const ticks = live.buffer.slice(1).map<LinePoint>((y, i) => ({
+      x: baseLastX + i + 1,
+      y,
+      label: `tick ${i + 1}`,
+    }))
+    return [...fxLine, ...ticks]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live.tickCount])
+
+  return (
+    <LiveFeed
+      current={live.current}
+      series={series}
+      variant={variant}
+      ariaLabel={ariaLabel}
+      unit="ZMW/USD"
+      caption={variant === 'hero' ? 'tools re-register on every tick' : undefined}
+      simulated
+      answerLabel={answerLabel}
+      answerDetail={answerDetail}
+    />
   )
 }

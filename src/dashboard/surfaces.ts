@@ -18,6 +18,7 @@
  */
 
 import type { SurfaceDef, ToolDef, MirrorEvent } from '../lib/agent-a11y'
+import { registry } from '../lib/agent-a11y'
 import {
   CHARTS,
   getChart,
@@ -32,6 +33,7 @@ import {
   pearson,
   type ChartMeta,
 } from './charts.ts'
+import { getCurrentRate, getSessionStats, getLiveValues } from './liveFeed.ts'
 import { monthIndexOf } from '../charts/data.ts'
 import { hlPoint, hlRange, barEmphasis, scatterRing } from '../charts/highlight.ts'
 import { isAudioReady, sonifySeries } from '../sonify.ts'
@@ -83,9 +85,9 @@ function sonifyMirror(chartId: string, durationMs: number): MirrorEvent {
   return { kind: 'sonify', chartId, durationMs }
 }
 
-/** What each sonifiable chart needs to narrate its sweep + name its true peak. */
-interface SonifySpec {
-  /** Numeric series to sweep, in draw order (reuses the imported arrays). */
+/** The resolved series + peak labels a single sonify pass sweeps. */
+interface SonifyResolved {
+  /** Numeric series to sweep, in draw order. */
   values: number[]
   /** Spoken period, e.g. "2015–2025" or "30 recent closes". */
   period: string
@@ -93,12 +95,23 @@ interface SonifySpec {
   peakWithUnit: string
   /** Where the peak falls, e.g. "Jan 2025" or "the year 2000". */
   peakLabel: string
+}
+
+/** What each sonifiable chart needs to narrate its sweep + name its true peak. */
+interface SonifySpec extends SonifyResolved {
   /**
    * Optional honesty note when a higher value is not "better" (mortality):
    * the pitch maps value→frequency, so the loudest/highest tone is the worst
    * year, not the best — say so.
    */
   peakCaveat?: string
+  /**
+   * Optional live resolver: when present it is called at execute time so the
+   * sweep reflects state that grows during the session (the exchange feed reads
+   * its accumulated ticks here; every other chart is static). Falls back to the
+   * static fields above when it returns fewer points than the baseline.
+   */
+  dynamic?: () => SonifyResolved
 }
 
 /**
@@ -127,16 +140,18 @@ function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
           data: { ok: false, needsAudio: true, chartId },
         }
       }
-      const { durationMs } = sonifySeries(spec.values)
+      // Resolve the live series if this chart accumulates one (exchange feed).
+      const resolved: SonifyResolved = spec.dynamic ? spec.dynamic() : spec
+      const { durationMs } = sonifySeries(resolved.values)
       const secs = Math.round(durationMs / 100) / 10
       const caveat = spec.peakCaveat ? ` ${spec.peakCaveat}` : ''
       const speech =
-        `Playing ${spec.period} as sound — ${spec.values.length} points over ~${secs} seconds. ` +
+        `Playing ${resolved.period} as sound — ${resolved.values.length} points over ~${secs} seconds. ` +
         `The tone rises with the value; listen for the loud ping at the peak: ` +
-        `${spec.peakWithUnit} in ${spec.peakLabel}.${caveat} Ask describe_trend to hear the shape in words.`
+        `${resolved.peakWithUnit} in ${resolved.peakLabel}.${caveat} Ask describe_trend to hear the shape in words.`
       return {
         speech,
-        data: { ok: true, chartId, points: spec.values.length, durationMs, peak: spec.peakWithUnit, peakAt: spec.peakLabel },
+        data: { ok: true, chartId, points: resolved.values.length, durationMs, peak: resolved.peakWithUnit, peakAt: resolved.peakLabel },
         mirror: sonifyMirror(chartId, durationMs),
       }
     },
@@ -534,57 +549,75 @@ function yieldFamily(): ToolDef[] {
 // --- exchange-rate (live) ---------------------------------------------------
 
 function exchangeFamily(): ToolDef[] {
-  const pts = exchange.points
-  const last = pts[pts.length - 1]
-  const lastIndex = pts.length - 1
+  // Read the SESSION-LOCAL live state at build time. `refreshExchangeSurface()`
+  // rebuilds this family on every tick, so `current_value`'s DESCRIPTION carries
+  // the latest rate and getTools() visibly changes over the session.
+  const rate = getCurrentRate()
+  const liveValues = getLiveValues()
+  const livePeak = liveValues.reduce((m, v) => (v > m ? v : m), liveValues[0])
 
   return [
     {
       name: 'exchange-rate_current_value',
       description:
-        'Report the latest ZMW/USD close from the (simulated) live feed. Ask ' +
-        'session_stats for the range over the available closes.',
+        `Get the live ZMW/USD rate — last tick ${round(rate, 2)} (simulated feed, re-registered every tick). ` +
+        "Ask session_stats for this session's range.",
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'exchange-rate_current_value()',
       execute: () => {
+        const s = getSessionStats()
         const speech =
-          `The latest close is ${round(last.y, 2)} ZMW/USD (${last.x}, ${SRC.exchange}). ` +
-          'The kwacha has firmed from ~27 in mid-2025 toward ~19. Ask session_stats for the range.'
+          `The live ZMW/USD rate is ${round(s.current, 2)} (${SRC.exchange}). ` +
+          `This session has ticked ${s.tickCount} time${s.tickCount === 1 ? '' : 's'} from the real seed ${round(s.seed, 2)}. ` +
+          'This tool re-registers each tick, so its listing in getTools() changes over time. Ask session_stats for the range.'
         return {
           speech,
-          data: { ok: true, value: last.y, date: last.x, unit: 'ZMW/USD', simulated: exchange.live_simulated },
-          mirror: hlPoint('exchange-rate', lastIndex, `${round(last.y, 2)} ZMW/USD`, `latest · ${last.x}`),
+          data: { ok: true, value: s.current, ticks: s.tickCount, seed: s.seed, unit: 'ZMW/USD', simulated: exchange.live_simulated },
+          mirror: hlPoint('exchange-rate', 0, `${round(s.current, 2)} ZMW/USD`, `live · tick ${s.tickCount}`),
         }
       },
     },
     {
       name: 'exchange-rate_session_stats',
       description:
-        'Summarise the ZMW/USD feed: min, max, and range over the available closes. Ask ' +
-        'current_value for the latest tick.',
+        "Summarise THIS browsing session's ZMW/USD feed: ticks seen, min, max and range — " +
+        'state that exists only in your session and is in no dataset. Ask current_value for the latest tick.',
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'exchange-rate_session_stats()',
       execute: () => {
-        // 4.3: replace with session-local stats accumulated as the live feed ticks.
-        const lo = minBy(pts, (p) => p.y)
-        const hi = maxBy(pts, (p) => p.y)
-        const range = hi.y - lo.y
+        const s = getSessionStats()
+        const secs = Math.round(s.elapsedMs / 1000)
+        const seen =
+          s.tickCount === 0
+            ? 'No ticks yet this session'
+            : `This session has seen ${s.tickCount} tick${s.tickCount === 1 ? '' : 's'} over ~${secs}s`
         const speech =
-          `Across ${pts.length} closes (${pts[0].x}–${last.x}), ZMW/USD ranged ${round(lo.y, 2)} (${lo.x}) ` +
-          `to ${round(hi.y, 2)} (${hi.x}) — a ${round(range, 2)} spread (${SRC.exchange}). ` +
-          'Ask current_value for the latest close.'
+          `${seen}. The rate ranged ${round(s.min, 2)}–${round(s.max, 2)} ZMW/USD ` +
+          `(range ${round(s.range, 2)}), now ${round(s.current, 2)}, walking from the real seed ${round(s.seed, 2)} (${SRC.exchange}). ` +
+          'These values exist only in your browser session — no offline model or dataset has them. Ask current_value for the latest tick.'
         return {
           speech,
-          data: { ok: true, min: lo.y, max: hi.y, range: Number(round(range, 2)), count: pts.length, unit: 'ZMW/USD' },
-          mirror: hlPoint('exchange-rate', lastIndex, `${round(lo.y, 2)}–${round(hi.y, 2)} ZMW/USD`, `range over ${pts.length} closes`),
+          data: { ok: true, ticks: s.tickCount, min: s.min, max: s.max, range: Number(round(s.range, 2)), current: s.current, seed: s.seed, elapsedMs: s.elapsedMs, unit: 'ZMW/USD' },
+          mirror: hlPoint('exchange-rate', 0, `${round(s.min, 2)}–${round(s.max, 2)} ZMW/USD`, `${s.tickCount} ticks · range ${round(s.range, 2)}`),
         }
       },
     },
     sonifyTool('exchange-rate', {
-      values: pts.map((p) => p.y),
-      period: `${pts.length} recent closes`,
-      peakWithUnit: `${round(maxBy(pts, (p) => p.y).y, 2)} ZMW/USD`,
-      peakLabel: maxBy(pts, (p) => p.y).x,
+      values: liveValues,
+      period: `${liveValues.length} closes`,
+      peakWithUnit: `${round(livePeak, 2)} ZMW/USD`,
+      peakLabel: 'the live feed',
+      // Read the session-accumulated buffer at play time so a grown feed is heard.
+      dynamic: () => {
+        const v = getLiveValues()
+        const pk = v.reduce((m, x) => (x > m ? x : m), v[0])
+        return {
+          values: v,
+          period: `${v.length} closes incl. this session's ticks`,
+          peakWithUnit: `${round(pk, 2)} ZMW/USD`,
+          peakLabel: 'the live feed',
+        }
+      },
     }),
   ]
 }
@@ -611,6 +644,19 @@ export function surfaceFor(chart: ChartMeta): SurfaceDef {
 export const CHART_SURFACES: Record<string, SurfaceDef> = Object.fromEntries(
   CHARTS.map((chart) => [chart.id, surfaceFor(chart)]),
 )
+
+/**
+ * Re-register the exchange family so `current_value`'s live description (and the
+ * tools' session-local answers) reflect the latest tick. `registry.registerSurface`
+ * re-applies the family only while exchange-rate is focused — cleanly aborting the
+ * old family's controller and registering the fresh one, so `getTools()` shows the
+ * new description with a constant tool COUNT and no listener leak. When not focused
+ * it just updates the stored def for the next focus. Called on each live-feed tick.
+ */
+export function refreshExchangeSurface(): void {
+  const chart = getChart('exchange-rate')
+  if (chart) registry.registerSurface('exchange-rate', surfaceFor(chart))
+}
 
 /** Registered tool names a chart's family exposes while focused (order preserved). */
 export function toolNamesFor(chartId: string): string[] {

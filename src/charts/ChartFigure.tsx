@@ -17,14 +17,12 @@ import type { ChartVariant } from './types.ts'
 import { LineChart } from './LineChart.tsx'
 import { BarChart } from './BarChart.tsx'
 import { ScatterChart } from './ScatterChart.tsx'
-import { LiveFeed } from './LiveFeed.tsx'
+import { ExchangeLiveFeed } from './LiveFeed.tsx'
 import {
   maizeLine,
   mortalityLine,
   mortalityBars,
   yieldScatter,
-  fxLine,
-  fxCurrent,
 } from './data.ts'
 import { yieldFert } from '../dashboard/charts.ts'
 import { lineHighlightFromMirror, type MirrorHighlightEvent } from './highlight.ts'
@@ -111,14 +109,9 @@ export function ChartFigure({
     case 'exchange-rate': {
       const answer = ev && ev.kind === 'highlight-point' ? ev : undefined
       return (
-        <LiveFeed
-          current={fxCurrent}
-          series={fxLine}
+        <ExchangeLiveFeed
           variant={variant}
           ariaLabel={aria}
-          unit="ZMW/USD"
-          caption={variant === 'hero' ? 'tools re-register on every tick' : undefined}
-          simulated
           answerLabel={answer?.label}
           answerDetail={answer?.detail}
         />

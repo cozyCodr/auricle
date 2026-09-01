@@ -1,6 +1,8 @@
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import './App.css'
 import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
+import { startLiveFeed, subscribeLiveFeed } from './dashboard/liveFeed'
+import { refreshExchangeSurface } from './dashboard/surfaces'
 import { ChartCard, useChartHighlight } from './charts'
 import { Rail } from './rail/Rail'
 import { subscribeAudio, isAudioReady, armAudio } from './sonify'
@@ -151,6 +153,18 @@ function App() {
   const others = CHARTS.filter((c) => c.id !== heroChart.id)
   // Mirror-driven: the focused chart's live highlight, painted on the hero.
   const highlight = useChartHighlight(heroChart.id)
+
+  // 4.3: start the ~5s simulated ZMW/USD feed and re-register the exchange family
+  // on every tick, so `current_value`'s description changes over time in getTools()
+  // and its session_stats are genuinely session-local. Cleaned up on unmount.
+  useEffect(() => {
+    const stop = startLiveFeed()
+    const unsub = subscribeLiveFeed(refreshExchangeSurface)
+    return () => {
+      unsub()
+      stop()
+    }
+  }, [])
 
   return (
     <div className="app">
