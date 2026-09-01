@@ -96,6 +96,38 @@
   border-radius: 2px;
 }
 
+/* "Enable sound" — the audio-arming gesture (near the Listening pill). */
+.app-header__sound {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--gold-ink);
+  background: var(--surface);
+  border: 2px solid var(--gold-ink);
+  border-radius: 99px;
+  padding: 7px 15px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.app-header__sound:hover {
+  background: var(--gold-band);
+}
+
+.app-header__sound:focus-visible {
+  outline: 3px solid var(--gold-ink);
+  outline-offset: 2px;
+}
+
+.app-header__sound--on {
+  color: var(--ink);
+  border-color: var(--border-soft);
+  background: var(--surface-alt);
+  cursor: default;
+}
+
 /* ---- Main / layout ---- */
 .app-main {
   flex: 1;
@@ -676,6 +708,44 @@
   font-style: italic;
 }
 
+/* Sonification equalizer — shown in the answer bubble while a chart plays. */
+.rail-sonify {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 22px;
+  margin-top: 10px;
+}
+
+.rail-sonify span {
+  width: 4px;
+  height: 30%;
+  background: var(--gold-ink);
+  border-radius: 2px;
+  animation: sonify-bar 0.62s ease-in-out infinite alternate;
+}
+
+@keyframes sonify-bar {
+  0% {
+    height: 15%;
+    opacity: 0.55;
+  }
+  100% {
+    height: 100%;
+    opacity: 1;
+  }
+}
+
+/* Reduced-motion fallback: a static "playing…" label (audio still plays). */
+.rail-sonify--static {
+  display: block;
+  height: auto;
+  margin: 10px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--gold-ink);
+}
+
 /* Tool-call log — the ARIA live region */
 .rail-log {
   display: flex;
@@ -783,5 +853,10 @@
   .card__focus,
   .card__focus-hint {
     transition: none;
+  }
+  /* The rail renders a static label here, but never animate bars regardless. */
+  .rail-sonify span {
+    animation: none;
+    height: 60%;
   }
 }

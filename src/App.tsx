@@ -1,7 +1,42 @@
+import { useSyncExternalStore } from 'react'
 import './App.css'
 import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
 import { ChartCard, useChartHighlight } from './charts'
 import { Rail } from './rail/Rail'
+import { subscribeAudio, isAudioReady, armAudio } from './sonify'
+
+/** Live view of whether Web Audio has been armed (a user gesture resumed it). */
+function useAudioReady(): boolean {
+  return useSyncExternalStore(subscribeAudio, isAudioReady, () => false)
+}
+
+/**
+ * "Enable sound" — the one-time gesture that lets the `*_sonify` tools play.
+ * Browsers only start audio from a real click, so this button stays visible
+ * (as an actionable control) until armed, then reads "Sound on".
+ */
+function EnableSoundButton() {
+  const ready = useAudioReady()
+  return (
+    <button
+      type="button"
+      className={`app-header__sound${ready ? ' app-header__sound--on' : ''}`}
+      aria-pressed={ready}
+      onClick={() => void armAudio()}
+      title={ready ? 'Audio is enabled — ask an agent to play a chart as sound' : 'Enable audio so charts can be played as sound'}
+    >
+      {ready ? (
+        <>
+          <span aria-hidden="true">♪</span> Sound on
+        </>
+      ) : (
+        <>
+          <span aria-hidden="true">♪</span> Enable sound
+        </>
+      )}
+    </button>
+  )
+}
 
 // Register the agent layer once, at module load: the three global orientation
 // tools + a focusable surface per chart. Then sync the registry to the default
@@ -76,6 +111,8 @@ function App() {
             <span style={{ height: '5px' }} />
           </span>
         </div>
+
+        <EnableSoundButton />
       </header>
 
       <main className="app-main">

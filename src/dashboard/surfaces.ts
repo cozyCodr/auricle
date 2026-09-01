@@ -17,7 +17,7 @@
  *  - exchange-rate (live): current_value, session_stats
  */
 
-import type { SurfaceDef, ToolDef } from '../lib/agent-a11y'
+import type { SurfaceDef, ToolDef, MirrorEvent } from '../lib/agent-a11y'
 import {
   CHARTS,
   getChart,
@@ -34,6 +34,7 @@ import {
 } from './charts.ts'
 import { monthIndexOf } from '../charts/data.ts'
 import { hlPoint, hlRange, barEmphasis, scatterRing } from '../charts/highlight.ts'
+import { isAudioReady, sonifySeries } from '../sonify.ts'
 
 /** The starter/describe tool name for a chart family, e.g. `maize-prices_describe_trend`. */
 export function describeTrendToolName(chartId: string): string {
@@ -73,6 +74,73 @@ function within<T>(items: readonly T[], xOf: (t: T) => number, lo: number | null
     const x = xOf(t)
     return (lo === null || x >= lo) && (hi === null || x <= hi)
   })
+}
+
+// --- Sonify (item 4.1): "hear the shape" for the ordered line/live series ---
+
+/** A mirror event the rail uses to animate its sonification bar for a while. */
+function sonifyMirror(chartId: string, durationMs: number): MirrorEvent {
+  return { kind: 'sonify', chartId, durationMs }
+}
+
+/** What each sonifiable chart needs to narrate its sweep + name its true peak. */
+interface SonifySpec {
+  /** Numeric series to sweep, in draw order (reuses the imported arrays). */
+  values: number[]
+  /** Spoken period, e.g. "2015–2025" or "30 recent closes". */
+  period: string
+  /** Peak value already formatted with its unit, e.g. "12.11 ZMW/kg". */
+  peakWithUnit: string
+  /** Where the peak falls, e.g. "Jan 2025" or "the year 2000". */
+  peakLabel: string
+  /**
+   * Optional honesty note when a higher value is not "better" (mortality):
+   * the pitch maps value→frequency, so the loudest/highest tone is the worst
+   * year, not the best — say so.
+   */
+  peakCaveat?: string
+}
+
+/**
+ * Build the `<chartId>_sonify` tool. It plays the focused chart's series as a
+ * ~3-second pitch sweep (220–880 Hz), pings the true peak, animates the rail
+ * bar for the duration, and narrates the real peak. If audio is not yet armed
+ * (the AudioContext is suspended pending a user gesture) it does NOT throw —
+ * it returns a narrated result telling the user to press "Enable sound" first.
+ */
+function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
+  return {
+    name: `${chartId}_sonify`,
+    description:
+      'Play this chart as sound — a ~3-second tone sweep where pitch rises with the ' +
+      'value (220–880 Hz), with a louder octave ping at the series peak so you can ' +
+      'hear where the maximum lands. Needs on-page audio to be enabled first. Ask ' +
+      'describe_trend to hear the same shape in words.',
+    inputSchema: { type: 'object', properties: {} },
+    argsSummary: () => `${chartId}_sonify()`,
+    execute: () => {
+      if (!isAudioReady()) {
+        return {
+          speech:
+            'Press the "Enable sound" button on the page first (browsers only start ' +
+            'audio from a click), then ask me to play it as sound.',
+          data: { ok: false, needsAudio: true, chartId },
+        }
+      }
+      const { durationMs } = sonifySeries(spec.values)
+      const secs = Math.round(durationMs / 100) / 10
+      const caveat = spec.peakCaveat ? ` ${spec.peakCaveat}` : ''
+      const speech =
+        `Playing ${spec.period} as sound — ${spec.values.length} points over ~${secs} seconds. ` +
+        `The tone rises with the value; listen for the loud ping at the peak: ` +
+        `${spec.peakWithUnit} in ${spec.peakLabel}.${caveat} Ask describe_trend to hear the shape in words.`
+      return {
+        speech,
+        data: { ok: true, chartId, points: spec.values.length, durationMs, peak: spec.peakWithUnit, peakAt: spec.peakLabel },
+        mirror: sonifyMirror(chartId, durationMs),
+      }
+    },
+  }
 }
 
 // --- maize-prices (line) ----------------------------------------------------
@@ -253,6 +321,12 @@ function maizeFamily(): ToolDef[] {
         }
       },
     },
+    sonifyTool('maize-prices', {
+      values: pts.map((p) => p.y),
+      period: `${fmtMonth(first.x).split(' ')[1]}–${fmtMonth(last.x).split(' ')[1]}`,
+      peakWithUnit: `${round(peak.y)} ZMW/kg`,
+      peakLabel: fmtMonth(peak.x),
+    }),
   ]
 }
 
@@ -335,6 +409,14 @@ function mortalityFamily(): ToolDef[] {
         }
       },
     },
+    sonifyTool('under5-mortality', {
+      values: s.map((p) => p.y),
+      period: `${first.x}–${last.x}`,
+      peakWithUnit: `${round(maxBy(s, (p) => p.y).y, 1)} per 1,000`,
+      peakLabel: `the year ${maxBy(s, (p) => p.y).x}`,
+      peakCaveat:
+        'Here a higher tone means worse, so the loudest ping is the pre-decline high — the tone then falls as mortality improves.',
+    }),
     {
       name: 'under5-mortality_compare_countries',
       description:
@@ -498,6 +580,12 @@ function exchangeFamily(): ToolDef[] {
         }
       },
     },
+    sonifyTool('exchange-rate', {
+      values: pts.map((p) => p.y),
+      period: `${pts.length} recent closes`,
+      peakWithUnit: `${round(maxBy(pts, (p) => p.y).y, 2)} ZMW/USD`,
+      peakLabel: maxBy(pts, (p) => p.y).x,
+    }),
   ]
 }
 
