@@ -1,6 +1,7 @@
 import './App.css'
 import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
 import { ChartCard, useChartHighlight } from './charts'
+import { Rail } from './rail/Rail'
 
 // Register the agent layer once, at module load: the three global orientation
 // tools + a focusable surface per chart. Then sync the registry to the default
@@ -93,16 +94,8 @@ function App() {
           </div>
         </div>
 
-        {/* Conversation rail placeholder — the real rail arrives in 3.3 */}
-        <aside className="rail-placeholder" aria-label="Conversation (coming soon)">
-          <div className="rail-placeholder__label">Conversation</div>
-          <p className="rail-placeholder__note">
-            The interview rail — questions, spoken answers, and the plain-words tool
-            log — arrives next. The agent tools (<code>describe_screen</code>,{' '}
-            <code>focus_chart</code>) are already live on{' '}
-            <code>document.modelContext</code>.
-          </p>
-        </aside>
+        {/* Conversation + tool-activity rail (3.3) */}
+        <Rail />
       </main>
     </div>
   )
