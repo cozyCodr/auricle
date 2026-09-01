@@ -1,0 +1,153 @@
+{
+  "source": "World Bank Open Data — Mortality rate, under-5 (SH.DYN.MORT)",
+  "source_url": "https://api.worldbank.org/v2/country/ZMB/indicator/SH.DYN.MORT?format=json&per_page=500",
+  "fetched_at": "2026-09-01T13:07:36.710Z",
+  "unit": "deaths per 1,000 live births",
+  "note": "Zambia's under-5 mortality more than halved from 102.7 (2005) to 48.4 (2024) — a genuine public-health gain; the comparator bars put Zambia mid-pack among African peers (below Nigeria/DRC, above Kenya/Tanzania/South Africa).",
+  "zambia_series": [
+    {
+      "x": 2000,
+      "y": 151.8
+    },
+    {
+      "x": 2001,
+      "y": 143.2
+    },
+    {
+      "x": 2002,
+      "y": 132.9
+    },
+    {
+      "x": 2003,
+      "y": 122.1
+    },
+    {
+      "x": 2004,
+      "y": 111.7
+    },
+    {
+      "x": 2005,
+      "y": 102.7
+    },
+    {
+      "x": 2006,
+      "y": 94.8
+    },
+    {
+      "x": 2007,
+      "y": 89.1
+    },
+    {
+      "x": 2008,
+      "y": 84.2
+    },
+    {
+      "x": 2009,
+      "y": 78.4
+    },
+    {
+      "x": 2010,
+      "y": 74.3
+    },
+    {
+      "x": 2011,
+      "y": 71.8
+    },
+    {
+      "x": 2012,
+      "y": 69.2
+    },
+    {
+      "x": 2013,
+      "y": 66
+    },
+    {
+      "x": 2014,
+      "y": 62.6
+    },
+    {
+      "x": 2015,
+      "y": 60.2
+    },
+    {
+      "x": 2016,
+      "y": 57.1
+    },
+    {
+      "x": 2017,
+      "y": 55.2
+    },
+    {
+      "x": 2018,
+      "y": 54.7
+    },
+    {
+      "x": 2019,
+      "y": 53.5
+    },
+    {
+      "x": 2020,
+      "y": 52.5
+    },
+    {
+      "x": 2021,
+      "y": 50.4
+    },
+    {
+      "x": 2022,
+      "y": 49.5
+    },
+    {
+      "x": 2023,
+      "y": 49.1
+    },
+    {
+      "x": 2024,
+      "y": 48.4
+    }
+  ],
+  "comparators_latest": [
+    {
+      "country": "Nigeria",
+      "code": "NGA",
+      "year": 2024,
+      "value": 115.6
+    },
+    {
+      "country": "Congo, Dem. Rep.",
+      "code": "COD",
+      "year": 2024,
+      "value": 89.7
+    },
+    {
+      "country": "Zimbabwe",
+      "code": "ZWE",
+      "year": 2024,
+      "value": 64.7
+    },
+    {
+      "country": "Zambia",
+      "code": "ZMB",
+      "year": 2024,
+      "value": 48.4
+    },
+    {
+      "country": "Kenya",
+      "code": "KEN",
+      "year": 2024,
+      "value": 38.8
+    },
+    {
+      "country": "Tanzania",
+      "code": "TZA",
+      "year": 2024,
+      "value": 37
+    },
+    {
+      "country": "South Africa",
+      "code": "ZAF",
+      "year": 2024,
+      "value": 35.1
+    }
+  ]
+}
