@@ -1,7 +1,7 @@
 /**
  * BarChart — hand-rolled SVG vertical bars, single data hue.
  *
- * Used for the under-5 mortality comparators. Craft: one hue for every bar, a 2px
+ * Used for the latest-year top-emitter comparators. Craft: one hue for every bar, a 2px
  * gap between bars (rounded tops), a single baseline axis, category labels in
  * muted ink. The home country is marked with an ink outline + value label rather
  * than a second color, keeping the single-hue rule intact.

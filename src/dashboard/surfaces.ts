@@ -1,44 +1,45 @@
 /**
- * surfaces.ts — the focus-scoped tool family for each chart.
+ * surfaces.ts — the focus-scoped tool family for each commissioned view.
  *
- * `registry.focus(id)` only registers a family for a surface that was previously
- * registered, so every chart id needs a `SurfaceDef` here. Item 3.2 fills each
- * family with real query tools whose `execute` computes from the imported JSON
- * (never a hardcoded paraphrase — refetch the data and the figures stay correct),
- * returns speech with exact figures + units + source, ends with a natural
- * next-step suggestion, and emits a `MirrorHighlightEvent` so the focused hero
- * paints the answer (gold band / point glow / bar ring / scatter ring).
+ * In the workspace arc, NO chart surface exists at boot: `create_view`
+ * (see `workspace.ts`) registers a surface + family at runtime when a view is
+ * commissioned, and `registry.focus(id)` swaps which family is live. Every tool
+ * `execute` computes from the imported JSON (never a hardcoded paraphrase —
+ * refetch the data and the figures stay correct), returns speech with exact
+ * figures + units + source, ends with a natural next-step suggestion, and emits
+ * a `MirrorHighlightEvent` so the focused hero paints the answer (gold band /
+ * point glow / bar ring / scatter ring).
  *
  * Tool families by chart kind:
- *  - maize-prices (line): query_point, query_range, find_extremes, describe_trend
- *  - under5-mortality (line + comparators): query_point, find_extremes,
- *    describe_trend, compare_countries
- *  - yield-fertilizer (scatter): describe_relationship, query_nearest
- *  - exchange-rate (live): current_value, session_stats
+ *  - temp-anomaly (line, hero): query_point, query_range, find_extremes,
+ *    describe_trend, sonify
+ *  - co2-emitters (line + bars): query_point, query_range, find_extremes,
+ *    describe_trend, compare_emitters, sonify
+ *  - wealth-carbon (scatter): describe_relationship, query_nearest
+ *  - co2-live (live): current_value, session_stats, sonify
  */
 
 import type { SurfaceDef, ToolDef, MirrorEvent } from '../lib/agent-a11y'
 import { registry } from '../lib/agent-a11y'
 import {
-  CHARTS,
   getChart,
-  maize,
-  mortality,
-  yieldFert,
-  exchange,
-  fmtMonth,
+  tempAnomaly,
+  emitters,
+  wealthCarbon,
+  co2Live,
   round,
+  fmtInt,
+  fmtAnomaly,
   minBy,
   maxBy,
   pearson,
   type ChartMeta,
 } from './charts.ts'
 import { getCurrentRate, getSessionStats, getLiveValues } from './liveFeed.ts'
-import { monthIndexOf } from '../charts/data.ts'
 import { hlPoint, hlRange, barEmphasis, scatterRing } from '../charts/highlight.ts'
 import { isAudioReady, sonifySeries } from '../sonify.ts'
 
-/** The starter/describe tool name for a chart family, e.g. `maize-prices_describe_trend`. */
+/** The starter/describe tool name for a chart family, e.g. `temp-anomaly_describe_trend`. */
 export function describeTrendToolName(chartId: string): string {
   return `${chartId}_describe_trend`
 }
@@ -46,23 +47,13 @@ export function describeTrendToolName(chartId: string): string {
 // --- Short source tags for speech (unit + provenance without a URL) ---------
 
 const SRC = {
-  maize: 'WFP retail prices via HDX',
-  mortality: 'World Bank, under-5 mortality',
-  yield: 'World Bank cereal-yield & fertilizer',
-  exchange: 'fawazahmed0 currency-api (simulated live)',
+  temp: 'NASA GISTEMP v4',
+  emitters: 'Our World in Data / Global Carbon Budget',
+  wealth: 'OWID — Global Carbon Budget + Maddison Project',
+  live: 'NOAA Mauna Loa weekly means (simulated live)',
 } as const
 
 // --- Small arg coercion helpers --------------------------------------------
-
-/** "2025", "2025-1", "2025-01" → "2025-01"; anything falsy → "". */
-function normalizeYm(raw: unknown): string {
-  const s = String(raw ?? '').trim()
-  if (!s) return ''
-  const [y, m] = s.split('-')
-  if (!/^\d{4}$/.test(y)) return ''
-  const mm = m ? String(Math.min(12, Math.max(1, Number(m)))).padStart(2, '0') : '01'
-  return `${y}-${mm}`
-}
 
 function toNum(raw: unknown): number | null {
   if (raw === null || raw === undefined || raw === '') return null
@@ -78,7 +69,7 @@ function within<T>(items: readonly T[], xOf: (t: T) => number, lo: number | null
   })
 }
 
-// --- Sonify (item 4.1): "hear the shape" for the ordered line/live series ---
+// --- Sonify: "hear the shape" for the ordered line/live series --------------
 
 /** A mirror event the rail uses to animate its sonification bar for a while. */
 function sonifyMirror(chartId: string, durationMs: number): MirrorEvent {
@@ -89,27 +80,22 @@ function sonifyMirror(chartId: string, durationMs: number): MirrorEvent {
 interface SonifyResolved {
   /** Numeric series to sweep, in draw order. */
   values: number[]
-  /** Spoken period, e.g. "2015–2025" or "30 recent closes". */
+  /** Spoken period, e.g. "1880–2025" or "76 weekly means". */
   period: string
-  /** Peak value already formatted with its unit, e.g. "12.11 ZMW/kg". */
+  /** Peak value already formatted with its unit, e.g. "+1.28 °C". */
   peakWithUnit: string
-  /** Where the peak falls, e.g. "Jan 2025" or "the year 2000". */
+  /** Where the peak falls, e.g. "2024". */
   peakLabel: string
 }
 
 /** What each sonifiable chart needs to narrate its sweep + name its true peak. */
 interface SonifySpec extends SonifyResolved {
-  /**
-   * Optional honesty note when a higher value is not "better" (mortality):
-   * the pitch maps value→frequency, so the loudest/highest tone is the worst
-   * year, not the best — say so.
-   */
+  /** Optional honesty note about what a high tone means for this series. */
   peakCaveat?: string
   /**
    * Optional live resolver: when present it is called at execute time so the
-   * sweep reflects state that grows during the session (the exchange feed reads
-   * its accumulated ticks here; every other chart is static). Falls back to the
-   * static fields above when it returns fewer points than the baseline.
+   * sweep reflects state that grows during the session (the co2-live feed reads
+   * its accumulated ticks here; every other chart is static).
    */
   dynamic?: () => SonifyResolved
 }
@@ -140,7 +126,6 @@ function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
           data: { ok: false, needsAudio: true, chartId },
         }
       }
-      // Resolve the live series if this chart accumulates one (exchange feed).
       const resolved: SonifyResolved = spec.dynamic ? spec.dynamic() : spec
       const { durationMs } = sonifySeries(resolved.values)
       const secs = Math.round(durationMs / 100) / 10
@@ -158,432 +143,485 @@ function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
   }
 }
 
-// --- maize-prices (line) ----------------------------------------------------
+// --- temp-anomaly (line, hero) ----------------------------------------------
 
-/** The real 2022-08 → 2023-11 methodology gap, derived from the data. */
-function maizeGap(): { before: (typeof maize.points)[number]; after: (typeof maize.points)[number]; months: number } {
-  const pts = maize.points
-  let gi = 1
-  let best = 0
-  for (let i = 1; i < pts.length; i++) {
-    const d = monthIndexOf(pts[i].x) - monthIndexOf(pts[i - 1].x)
-    if (d > best) {
-      best = d
-      gi = i
-    }
-  }
-  return { before: pts[gi - 1], after: pts[gi], months: best }
-}
-
-function maizeFamily(): ToolDef[] {
-  const pts = maize.points
-  const peak = maxBy(pts, (p) => p.y)
+function tempFamily(): ToolDef[] {
+  const pts = tempAnomaly.points
   const first = pts[0]
   const last = pts[pts.length - 1]
-  const gap = maizeGap()
+  const peak = maxBy(pts, (p) => p.y)
 
   return [
     {
-      name: 'maize-prices_query_point',
+      name: 'temp-anomaly_query_point',
       description:
-        'Look up the maize-meal retail price for one month (YYYY-MM). Returns the ' +
-        'nearest reading with ZMW/kg and whether it is the decade peak. Try ' +
-        'find_extremes for the peak, or query_range for a change over time.',
+        'Look up the global temperature anomaly for one year (e.g. 1998). Returns the ' +
+        'nearest annual reading in °C vs the 1951–1980 average and whether it is the ' +
+        'record. Try find_extremes for the record year, or query_range for a change.',
       inputSchema: {
         type: 'object',
-        properties: { date: { type: 'string', description: 'Month as "YYYY-MM", e.g. "2025-01".' } },
-        required: ['date'],
+        properties: { year: { type: 'number', description: 'Calendar year, e.g. 1998.' } },
+        required: ['year'],
       },
-      argsSummary: (a) => `maize-prices_query_point(${normalizeYm((a as { date?: unknown }).date) || '?'})`,
+      argsSummary: (a) => `temp-anomaly_query_point(${toNum((a as { year?: unknown }).year) ?? '?'})`,
       execute: (a) => {
-        const ym = normalizeYm((a as { date?: unknown }).date)
-        if (!ym) {
+        const year = toNum((a as { year?: unknown }).year)
+        if (year === null) {
           return {
-            speech: 'Give a month as "YYYY-MM", e.g. "2025-01". You can also ask describe_trend for the full shape.',
+            speech: 'Give a year, e.g. 1998. You can also ask describe_trend for the full 146-year shape.',
             data: { ok: false },
           }
         }
-        const target = monthIndexOf(ym)
-        const nearest = minBy(pts, (p) => Math.abs(monthIndexOf(p.x) - target))
-        const exact = monthIndexOf(nearest.x) === target
-        const inGap = target > monthIndexOf(gap.before.x) && target < monthIndexOf(gap.after.x)
-        const isPeak = nearest.x === peak.x
-        const gapNote = !exact && inGap
-          ? ` That month falls in the ${fmtMonth(gap.before.x)}→${fmtMonth(gap.after.x)} WFP data gap (a methodology change, not interpolated), so the nearest reading is ${fmtMonth(nearest.x)}.`
-          : !exact
-            ? ` No exact reading for ${fmtMonth(ym)}; nearest is ${fmtMonth(nearest.x)}.`
-            : ''
-        const peakNote = isPeak ? ' That is the decade peak.' : ''
+        const near = minBy(pts, (p) => Math.abs(p.x - year))
+        const exactNote = near.x === year ? '' : ` (nearest year to ${year})`
+        const isPeak = near.x === peak.x
+        const peakNote = isPeak ? ' That is the warmest year in the instrumental record.' : ''
         const speech =
-          `In ${fmtMonth(nearest.x)}, maize meal was ${round(nearest.y)} ZMW/kg ` +
-          `(${SRC.maize}).${gapNote}${peakNote} ` +
-          'You can ask query_range for a change over time, or find_extremes for the peak.'
+          `In ${near.x}, the global mean was ${fmtAnomaly(near.y)} °C versus the 1951–1980 average` +
+          `${exactNote} (${SRC.temp}).${peakNote} ` +
+          'Ask query_range for a change over time, or find_extremes for the record.'
         return {
           speech,
-          data: { ok: true, month: fmtMonth(nearest.x), price: nearest.y, unit: 'ZMW/kg', exact, isPeak, source: maize.source },
-          mirror: hlPoint('maize-prices', monthIndexOf(nearest.x), `${round(nearest.y)} ZMW/kg`, fmtMonth(nearest.x)),
+          data: { ok: true, year: near.x, anomaly: near.y, unit: '°C vs 1951–1980', exact: near.x === year, isPeak, source: tempAnomaly.source },
+          mirror: hlPoint('temp-anomaly', near.x, `${fmtAnomaly(near.y)} °C`, String(near.x)),
         }
       },
     },
     {
-      name: 'maize-prices_query_range',
+      name: 'temp-anomaly_query_range',
       description:
-        'Compare the maize price across a date range (start, end as YYYY-MM). Returns ' +
-        'start/end values, percent change, and the min & max within the window. Ask ' +
-        'find_extremes for the all-time peak, or describe_trend for the full story.',
+        'Compare the temperature anomaly across a year range (start, end). Returns ' +
+        'start/end anomalies, the change in °C, and the min & max within the window. ' +
+        'Ask find_extremes for the record, or describe_trend for the full story.',
       inputSchema: {
         type: 'object',
         properties: {
-          start: { type: 'string', description: 'Start month "YYYY-MM".' },
-          end: { type: 'string', description: 'End month "YYYY-MM".' },
+          start: { type: 'number', description: 'Start year, e.g. 1950.' },
+          end: { type: 'number', description: 'End year, e.g. 2024.' },
         },
         required: ['start', 'end'],
       },
       argsSummary: (a) => {
-        const s = normalizeYm((a as { start?: unknown }).start)
-        const e = normalizeYm((a as { end?: unknown }).end)
-        return `maize-prices_query_range(${s || '?'} … ${e || '?'})`
+        const s = toNum((a as { start?: unknown }).start)
+        const e = toNum((a as { end?: unknown }).end)
+        return `temp-anomaly_query_range(${s ?? '?'} … ${e ?? '?'})`
       },
       execute: (a) => {
-        const s = normalizeYm((a as { start?: unknown }).start)
-        const e = normalizeYm((a as { end?: unknown }).end)
-        if (!s || !e) {
-          return { speech: 'Give both start and end as "YYYY-MM". Or ask describe_trend for the whole span.', data: { ok: false } }
+        const s = toNum((a as { start?: unknown }).start)
+        const e = toNum((a as { end?: unknown }).end)
+        if (s === null || e === null) {
+          return { speech: 'Give both start and end years, e.g. 1950 and 2024. Or ask describe_trend for the whole span.', data: { ok: false } }
         }
-        const lo = Math.min(monthIndexOf(s), monthIndexOf(e))
-        const hi = Math.max(monthIndexOf(s), monthIndexOf(e))
-        const win = within(pts, (p) => monthIndexOf(p.x), lo, hi)
+        const lo = Math.min(s, e)
+        const hi = Math.max(s, e)
+        const win = within(pts, (p) => p.x, lo, hi)
         if (win.length === 0) {
-          return { speech: `No maize readings between ${fmtMonth(s)} and ${fmtMonth(e)} — likely inside the data gap. Try a wider range.`, data: { ok: false } }
+          return { speech: `No annual readings between ${lo} and ${hi} — the record runs ${first.x}–${last.x}. Try a range inside it.`, data: { ok: false } }
         }
         const a0 = win[0]
         const a1 = win[win.length - 1]
-        const pct = ((a1.y - a0.y) / a0.y) * 100
+        const delta = a1.y - a0.y
         const loP = minBy(win, (p) => p.y)
         const hiP = maxBy(win, (p) => p.y)
-        const dir = pct >= 0 ? 'up' : 'down'
+        const dir = delta >= 0 ? 'warmed' : 'cooled'
         const speech =
-          `From ${fmtMonth(a0.x)} to ${fmtMonth(a1.x)}, maize meal went ` +
-          `${round(a0.y)} → ${round(a1.y)} ZMW/kg, ${dir} ${round(Math.abs(pct), 1)}% ` +
-          `(${SRC.maize}). Within the window it ranged ${round(loP.y)} (${fmtMonth(loP.x)}) ` +
-          `to ${round(hiP.y)} (${fmtMonth(hiP.x)}). Ask find_extremes for the all-time peak.`
+          `From ${a0.x} to ${a1.x}, the global mean ${dir} by ${round(Math.abs(delta), 2)} °C: ` +
+          `${fmtAnomaly(a0.y)} → ${fmtAnomaly(a1.y)} °C vs 1951–1980 (${SRC.temp}). Within the window it ` +
+          `ranged ${fmtAnomaly(loP.y)} (${loP.x}) to ${fmtAnomaly(hiP.y)} (${hiP.x}). ` +
+          'Ask find_extremes for the all-time record.'
         return {
           speech,
-          data: { ok: true, start: fmtMonth(a0.x), end: fmtMonth(a1.x), pctChange: Number(pct.toFixed(1)), min: loP.y, max: hiP.y, unit: 'ZMW/kg' },
-          mirror: hlRange('maize-prices', monthIndexOf(a0.x), monthIndexOf(a1.x), `${pct >= 0 ? '+' : ''}${round(pct, 1)}%`),
+          data: { ok: true, start: a0.x, end: a1.x, deltaC: Number(delta.toFixed(2)), min: loP.y, max: hiP.y, unit: '°C vs 1951–1980' },
+          mirror: hlRange('temp-anomaly', a0.x, a1.x, `${delta >= 0 ? '+' : '−'}${round(Math.abs(delta), 2)} °C`),
         }
       },
     },
     {
-      name: 'maize-prices_find_extremes',
+      name: 'temp-anomaly_find_extremes',
       description:
-        'Find the lowest and highest maize price over the whole series or an optional ' +
-        'window (start/end as YYYY-MM). Returns both with their months. Ask query_range ' +
-        'for a specific change, or describe_trend for the full arc.',
+        'Find the coldest and warmest years over the whole record or an optional year ' +
+        'window (start/end). Returns both with their anomalies. Ask query_range for a ' +
+        'specific change, or describe_trend for the full arc.',
       inputSchema: {
         type: 'object',
         properties: {
-          start: { type: 'string', description: 'Optional start "YYYY-MM".' },
-          end: { type: 'string', description: 'Optional end "YYYY-MM".' },
+          start: { type: 'number', description: 'Optional start year.' },
+          end: { type: 'number', description: 'Optional end year.' },
         },
       },
       argsSummary: (a) => {
-        const s = normalizeYm((a as { start?: unknown }).start)
-        const e = normalizeYm((a as { end?: unknown }).end)
-        return s || e ? `maize-prices_find_extremes(${s || '…'} … ${e || '…'})` : 'maize-prices_find_extremes(all)'
+        const s = toNum((a as { start?: unknown }).start)
+        const e = toNum((a as { end?: unknown }).end)
+        return s !== null || e !== null ? `temp-anomaly_find_extremes(${s ?? '…'} … ${e ?? '…'})` : 'temp-anomaly_find_extremes(all)'
       },
       execute: (a) => {
-        const s = normalizeYm((a as { start?: unknown }).start)
-        const e = normalizeYm((a as { end?: unknown }).end)
-        const lo = s ? monthIndexOf(s) : null
-        const hi = e ? monthIndexOf(e) : null
-        const win = within(pts, (p) => monthIndexOf(p.x), lo, hi)
+        const s = toNum((a as { start?: unknown }).start)
+        const e = toNum((a as { end?: unknown }).end)
+        const win = within(pts, (p) => p.x, s, e)
         const set = win.length ? win : pts
         const mn = minBy(set, (p) => p.y)
         const mx = maxBy(set, (p) => p.y)
-        const scope = s || e ? `${fmtMonth(s || first.x)}–${fmtMonth(e || last.x)}` : '2015–2025'
+        const scope = s !== null || e !== null ? `${s ?? first.x}–${e ?? last.x}` : `${first.x}–${last.x}`
+        const recordNote = mx.x === peak.x ? ' — the warmest year in the entire instrumental record' : ''
         const speech =
-          `Over ${scope}, maize meal ranged from a low of ${round(mn.y)} ZMW/kg in ` +
-          `${fmtMonth(mn.x)} to a high of ${round(mx.y)} in ${fmtMonth(mx.x)} (${SRC.maize}). ` +
+          `Over ${scope}, the coldest year was ${mn.x} at ${fmtAnomaly(mn.y)} °C and the warmest ` +
+          `was ${mx.x} at ${fmtAnomaly(mx.y)} °C${recordNote} (${SRC.temp}, vs 1951–1980). ` +
           'You can ask describe_trend for the full shape, or query_range for a change.'
         return {
           speech,
-          data: { ok: true, min: { month: fmtMonth(mn.x), value: mn.y }, max: { month: fmtMonth(mx.x), value: mx.y }, unit: 'ZMW/kg' },
-          mirror: hlPoint('maize-prices', monthIndexOf(mx.x), `${round(mx.y)} ZMW/kg`, `peak · ${fmtMonth(mx.x)}`),
+          data: { ok: true, min: { year: mn.x, anomaly: mn.y }, max: { year: mx.x, anomaly: mx.y }, unit: '°C vs 1951–1980' },
+          mirror: hlPoint('temp-anomaly', mx.x, `${fmtAnomaly(mx.y)} °C`, `record · ${mx.x}`),
         }
       },
     },
     {
-      name: describeTrendToolName('maize-prices'),
+      name: describeTrendToolName('temp-anomaly'),
       description:
-        'Narrate the full shape of the maize-meal price line: the multi-fold rise, its ' +
-        'drivers, and the real data gap. Then ask query_point, query_range, or ' +
-        'find_extremes to drill in.',
+        'Narrate the full shape of the warming curve: the 19th-century baseline, the ' +
+        'late-1970s zero crossing, the acceleration, and the record. Then ask ' +
+        'query_point, query_range, or find_extremes to drill in.',
       inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'maize-prices_describe_trend()',
+      argsSummary: () => 'temp-anomaly_describe_trend()',
       execute: () => {
-        const ratio = round(peak.y / first.y, 1)
+        const early = pts.slice(0, 20)
+        const earlyMean = early.reduce((s2, p) => s2 + p.y, 0) / early.length
         const speech =
-          `Maize meal climbed about ${ratio}× — from ${round(first.y)} ZMW/kg in ${fmtMonth(first.x)} ` +
-          `to a ${round(peak.y)} peak in ${fmtMonth(peak.x)} — driven by the 2022 kwacha slide and the ` +
-          `2023–24 El Niño drought, easing to ${round(last.y)} by ${fmtMonth(last.x)} after the 2025 harvest ` +
-          `(${SRC.maize}). Note the ${fmtMonth(gap.before.x)}→${fmtMonth(gap.after.x)} gap — a WFP methodology ` +
-          'change, left un-interpolated. Ask find_extremes for the peak, or query_range for any window.'
+          `${pts.length} years of global temperature, ${first.x}–${last.x}: the late-1800s sit around ` +
+          `${fmtAnomaly(Number(earlyMean.toFixed(2)))} °C vs the 1951–1980 average, the curve crosses zero in the ` +
+          `late 1970s and then accelerates — peaking at ${fmtAnomaly(peak.y)} °C in ${peak.x}, the warmest year on ` +
+          `record, with ${last.x} at ${fmtAnomaly(last.y)} (${SRC.temp}). ` +
+          'Ask find_extremes for the record, or query_range for any window.'
         return {
           speech,
-          data: { id: 'maize-prices', headline: getChart('maize-prices')?.headline(), riseFactor: Number(ratio), gapMonths: gap.months },
-          mirror: hlRange('maize-prices', monthIndexOf(first.x), monthIndexOf(last.x), `${ratio}× rise`),
+          data: { id: 'temp-anomaly', headline: getChart('temp-anomaly')?.headline(), record: { year: peak.x, anomaly: peak.y } },
+          mirror: hlRange('temp-anomaly', first.x, last.x, `${fmtAnomaly(peak.y - earlyMean)} °C of warming`),
         }
       },
     },
-    sonifyTool('maize-prices', {
+    sonifyTool('temp-anomaly', {
       values: pts.map((p) => p.y),
-      period: `${fmtMonth(first.x).split(' ')[1]}–${fmtMonth(last.x).split(' ')[1]}`,
-      peakWithUnit: `${round(peak.y)} ZMW/kg`,
-      peakLabel: fmtMonth(peak.x),
+      period: `${first.x}–${last.x}`,
+      peakWithUnit: `${fmtAnomaly(peak.y)} °C`,
+      peakLabel: String(peak.x),
+      peakCaveat: 'Here the rising pitch IS the warming — the sweep ends near its highest tones.',
     }),
   ]
 }
 
-// --- under5-mortality (line + comparators) ----------------------------------
+// --- co2-emitters (global line + top-emitter bars) ---------------------------
 
-function mortalityFamily(): ToolDef[] {
-  const s = mortality.zambia_series
+function emittersFamily(): ToolDef[] {
+  const s = emitters.global_series
   const first = s[0]
   const last = s[s.length - 1]
-  const cmp = [...mortality.comparators_latest].sort((c1, c2) => c2.value - c1.value)
+  const peak = maxBy(s, (p) => p.y)
+  const ranked = emitters.emitters_latest // already sorted desc by the pipeline
 
   return [
     {
-      name: 'under5-mortality_query_point',
+      name: 'co2-emitters_query_point',
       description:
-        "Look up Zambia's under-5 mortality for one year. Returns deaths per 1,000 live " +
-        'births for the nearest year. Ask find_extremes for the halving, or ' +
-        'compare_countries to see Zambia against its peers.',
+        'Look up global fossil CO₂ emissions for one year. Returns million tonnes for ' +
+        'the nearest year. Ask compare_emitters for who emits the most today, or ' +
+        'describe_trend for the full rise.',
       inputSchema: {
         type: 'object',
-        properties: { year: { type: 'number', description: 'Calendar year, e.g. 2010.' } },
+        properties: { year: { type: 'number', description: 'Calendar year, e.g. 1990.' } },
         required: ['year'],
       },
-      argsSummary: (a) => `under5-mortality_query_point(${toNum((a as { year?: unknown }).year) ?? '?'})`,
+      argsSummary: (a) => `co2-emitters_query_point(${toNum((a as { year?: unknown }).year) ?? '?'})`,
       execute: (a) => {
         const year = toNum((a as { year?: unknown }).year)
         if (year === null) {
-          return { speech: 'Give a year, e.g. 2010. Or ask describe_trend for the whole decline.', data: { ok: false } }
+          return { speech: 'Give a year, e.g. 1990. Or ask describe_trend for the whole rise.', data: { ok: false } }
         }
         const near = minBy(s, (p) => Math.abs(p.x - year))
         const exactNote = near.x === year ? '' : ` (nearest year to ${year})`
         const speech =
-          `In ${near.x}, Zambia's under-5 mortality was ${round(near.y, 1)} deaths per 1,000 live births` +
-          `${exactNote} (${SRC.mortality}). Ask find_extremes for the halving, or compare_countries for peers.`
+          `In ${near.x}, the world emitted ${fmtInt(near.y)} million tonnes of fossil CO₂` +
+          `${exactNote} (${SRC.emitters}). Ask compare_emitters for today's ranking, or query_range for a change.`
         return {
           speech,
-          data: { ok: true, year: near.x, value: near.y, unit: 'deaths per 1,000 live births', source: mortality.source },
-          mirror: hlPoint('under5-mortality', near.x, `${round(near.y, 1)} per 1,000`, String(near.x)),
+          data: { ok: true, year: near.x, value: near.y, unit: 'Mt CO₂', source: emitters.source },
+          mirror: hlPoint('co2-emitters', near.x, `${fmtInt(near.y)} Mt`, String(near.x)),
         }
       },
     },
     {
-      name: 'under5-mortality_find_extremes',
+      name: 'co2-emitters_query_range',
       description:
-        "Report the start and end of Zambia's under-5 mortality series — the halving " +
-        'story — with both years and values. Ask compare_countries for the peer ranking.',
-      inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'under5-mortality_find_extremes()',
-      execute: () => {
-        const hi = maxBy(s, (p) => p.y)
-        const lo = minBy(s, (p) => p.y)
-        const pct = ((lo.y - hi.y) / hi.y) * 100
-        const speech =
-          `Zambia's under-5 mortality fell from its high of ${round(hi.y, 1)} in ${hi.x} to ${round(lo.y, 1)} ` +
-          `deaths per 1,000 in ${lo.x} — down ${round(Math.abs(pct), 0)}%, more than a halving (${SRC.mortality}). ` +
-          'Ask compare_countries to place Zambia among its peers.'
-        return {
-          speech,
-          data: { ok: true, high: { year: hi.x, value: hi.y }, low: { year: lo.x, value: lo.y }, pctChange: Number(pct.toFixed(0)) },
-          mirror: hlRange('under5-mortality', hi.x, lo.x, `${round(pct, 0)}%`),
-        }
-      },
-    },
-    {
-      name: describeTrendToolName('under5-mortality'),
-      description:
-        "Narrate Zambia's under-5 mortality decline (2000–2024) — a genuine public-health " +
-        'gain. Ask compare_countries for peers, or query_point for one year.',
-      inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'under5-mortality_describe_trend()',
-      execute: () => {
-        const speech =
-          `Zambia's under-5 mortality more than halved, from ${round(first.y, 1)} deaths per 1,000 in ${first.x} ` +
-          `to ${round(last.y, 1)} in ${last.x} — a steady, genuine public-health gain (${SRC.mortality}). ` +
-          'Ask compare_countries to see where that leaves Zambia among African peers.'
-        return {
-          speech,
-          data: { id: 'under5-mortality', headline: getChart('under5-mortality')?.headline() },
-          mirror: hlRange('under5-mortality', first.x, last.x, 'halved'),
-        }
-      },
-    },
-    sonifyTool('under5-mortality', {
-      values: s.map((p) => p.y),
-      period: `${first.x}–${last.x}`,
-      peakWithUnit: `${round(maxBy(s, (p) => p.y).y, 1)} per 1,000`,
-      peakLabel: `the year ${maxBy(s, (p) => p.y).x}`,
-      peakCaveat:
-        'Here a higher tone means worse, so the loudest ping is the pre-decline high — the tone then falls as mortality improves.',
-    }),
-    {
-      name: 'under5-mortality_compare_countries',
-      description:
-        "Rank Zambia's latest under-5 mortality against African peers (World Bank 2024) " +
-        'and say where Zambia sits. Emphasises the Zambia comparator bar. Ask ' +
-        'describe_trend for the time story.',
-      inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'under5-mortality_compare_countries()',
-      execute: () => {
-        const zi = cmp.findIndex((c) => c.code === 'ZMB')
-        const zam = cmp[zi]
-        const above = cmp[zi - 1] // higher value (worse)
-        const below = cmp[zi + 1] // lower value (better)
-        const rank = zi + 1
-        const speech =
-          `Zambia ${round(zam.value, 1)} sits mid-pack — ${rank}th of ${cmp.length} (${zam.year}): ` +
-          `below ${above.country} ${round(above.value, 1)} and DR Congo ${round(cmp.find((c) => c.code === 'COD')!.value, 1)}, ` +
-          `above ${below.country} ${round(below.value, 1)} and Tanzania ${round(cmp.find((c) => c.code === 'TZA')!.value, 1)} ` +
-          `(${SRC.mortality}, per 1,000 live births). Ask describe_trend for how Zambia got here.`
-        return {
-          speech,
-          data: { ok: true, rank, of: cmp.length, zambia: zam.value, ranking: cmp.map((c) => ({ country: c.country, value: c.value })) },
-          mirror: barEmphasis('under5-mortality', 'Zambia', `${round(zam.value, 1)} per 1,000`, `mid-pack · ${rank} of ${cmp.length}`),
-        }
-      },
-    },
-  ]
-}
-
-// --- yield-fertilizer (scatter) ---------------------------------------------
-
-function yieldFamily(): ToolDef[] {
-  const pts = yieldFert.points
-  const rAll = pearson(pts.map((p) => p.x), pts.map((p) => p.y))
-  const post2000 = pts.filter((p) => p.year >= 2000)
-  const rRecent = pearson(post2000.map((p) => p.x), post2000.map((p) => p.y))
-  const first = pts[0]
-  const last = pts[pts.length - 1]
-  const maxFert = maxBy(pts, (p) => p.x)
-
-  return [
-    {
-      name: 'yield-fertilizer_describe_relationship',
-      description:
-        'Compute and explain the fertilizer→yield relationship for Zambia: the Pearson ' +
-        'correlation over the full window and since 2000, with the rain-dependent caveat. ' +
-        'Ask query_nearest for a specific year.',
-      inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'yield-fertilizer_describe_relationship()',
-      execute: () => {
-        const speech =
-          `Fertilizer use and cereal yield in Zambia are positively but loosely linked: ` +
-          `Pearson r≈${round(rAll, 2)} over ${first.year}–${last.year} (r≈${round(rRecent, 2)} since 2000). ` +
-          `It is real but rain-dependent — even at the ${round(maxFert.x)} kg/ha fertilizer peak (${maxFert.year}), ` +
-          `yield was only ${round(maxFert.y)} kg/ha, so wet-year outliers scatter the cloud (${SRC.yield}). ` +
-          'Ask query_nearest for any single year.'
-        return {
-          speech,
-          data: { ok: true, rFull: Number(round(rAll, 2)), rSince2000: Number(round(rRecent, 2)), window: `${first.year}–${last.year}` },
-          mirror: scatterRing('yield-fertilizer', maxFert.year, `r≈${round(rAll, 2)}`, `${round(maxFert.x)} kg/ha fert → ${round(maxFert.y)} kg/ha yield`),
-        }
-      },
-    },
-    {
-      name: 'yield-fertilizer_query_nearest',
-      description:
-        'Return the fertilizer/yield point for a given year (or nearest fertilizer x / ' +
-        'yield y). Rings that dot. Ask describe_relationship for the overall correlation.',
+        'Compare global CO₂ emissions across a year range (start, end). Returns ' +
+        'start/end totals, the multiple, and min & max within the window. Ask ' +
+        'compare_emitters for the country ranking.',
       inputSchema: {
         type: 'object',
         properties: {
-          year: { type: 'number', description: 'Calendar year, e.g. 2010.' },
-          x: { type: 'number', description: 'Optional: fertilizer kg/ha to match instead.' },
-          y: { type: 'number', description: 'Optional: cereal yield kg/ha to match instead.' },
+          start: { type: 'number', description: 'Start year, e.g. 1950.' },
+          end: { type: 'number', description: 'End year, e.g. 2024.' },
+        },
+        required: ['start', 'end'],
+      },
+      argsSummary: (a) => {
+        const st = toNum((a as { start?: unknown }).start)
+        const en = toNum((a as { end?: unknown }).end)
+        return `co2-emitters_query_range(${st ?? '?'} … ${en ?? '?'})`
+      },
+      execute: (a) => {
+        const st = toNum((a as { start?: unknown }).start)
+        const en = toNum((a as { end?: unknown }).end)
+        if (st === null || en === null) {
+          return { speech: 'Give both start and end years, e.g. 1950 and 2024. Or ask describe_trend for the whole rise.', data: { ok: false } }
+        }
+        const lo = Math.min(st, en)
+        const hi = Math.max(st, en)
+        const win = within(s, (p) => p.x, lo, hi)
+        if (win.length === 0) {
+          return { speech: `No yearly readings between ${lo} and ${hi} — the series runs ${first.x}–${last.x}.`, data: { ok: false } }
+        }
+        const a0 = win[0]
+        const a1 = win[win.length - 1]
+        const factor = a1.y / a0.y
+        const loP = minBy(win, (p) => p.y)
+        const hiP = maxBy(win, (p) => p.y)
+        const speech =
+          `From ${a0.x} to ${a1.x}, global fossil CO₂ went ${fmtInt(a0.y)} → ${fmtInt(a1.y)} Mt — ` +
+          `${round(factor, 1)}× (${SRC.emitters}). Within the window it ranged ${fmtInt(loP.y)} (${loP.x}) ` +
+          `to ${fmtInt(hiP.y)} (${hiP.x}). Ask compare_emitters for who emits that today.`
+        return {
+          speech,
+          data: { ok: true, start: a0.x, end: a1.x, factor: Number(factor.toFixed(1)), min: loP.y, max: hiP.y, unit: 'Mt CO₂' },
+          mirror: hlRange('co2-emitters', a0.x, a1.x, `${round(factor, 1)}×`),
+        }
+      },
+    },
+    {
+      name: 'co2-emitters_find_extremes',
+      description:
+        'Find the lowest and highest global emission years over the whole series or an ' +
+        'optional window (start/end years). The high is the most recent year — emissions ' +
+        'are still setting records. Ask describe_trend for the arc.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          start: { type: 'number', description: 'Optional start year.' },
+          end: { type: 'number', description: 'Optional end year.' },
         },
       },
       argsSummary: (a) => {
-        const y = toNum((a as { year?: unknown }).year)
-        const x = toNum((a as { x?: unknown }).x)
-        const yy = toNum((a as { y?: unknown }).y)
-        if (y !== null) return `yield-fertilizer_query_nearest(${y})`
-        if (x !== null) return `yield-fertilizer_query_nearest(x:${x})`
-        if (yy !== null) return `yield-fertilizer_query_nearest(y:${yy})`
-        return 'yield-fertilizer_query_nearest(latest)'
+        const st = toNum((a as { start?: unknown }).start)
+        const en = toNum((a as { end?: unknown }).end)
+        return st !== null || en !== null ? `co2-emitters_find_extremes(${st ?? '…'} … ${en ?? '…'})` : 'co2-emitters_find_extremes(all)'
       },
       execute: (a) => {
-        const yr = toNum((a as { year?: unknown }).year)
-        const x = toNum((a as { x?: unknown }).x)
-        const yy = toNum((a as { y?: unknown }).y)
-        let pt = last
-        let how = 'latest year'
-        if (yr !== null) {
-          pt = minBy(pts, (p) => Math.abs(p.year - yr))
-          how = `nearest year to ${yr}`
-        } else if (x !== null) {
-          pt = minBy(pts, (p) => Math.abs(p.x - x))
-          how = `nearest fertilizer to ${round(x)} kg/ha`
-        } else if (yy !== null) {
-          pt = minBy(pts, (p) => Math.abs(p.y - yy))
-          how = `nearest yield to ${round(yy)} kg/ha`
-        }
+        const st = toNum((a as { start?: unknown }).start)
+        const en = toNum((a as { end?: unknown }).end)
+        const win = within(s, (p) => p.x, st, en)
+        const set = win.length ? win : s
+        const mn = minBy(set, (p) => p.y)
+        const mx = maxBy(set, (p) => p.y)
+        const scope = st !== null || en !== null ? `${st ?? first.x}–${en ?? last.x}` : `${first.x}–${last.x}`
+        const recordNote = mx.x === peak.x && peak.x === last.x ? ' — a record, set in the latest year of data' : ''
         const speech =
-          `In ${pt.year} (${how}), Zambia used ${round(pt.x)} kg/ha of fertilizer for a cereal yield of ` +
-          `${round(pt.y)} kg/ha (${SRC.yield}). Ask describe_relationship for the overall correlation.`
+          `Over ${scope}, global fossil CO₂ ranged from ${fmtInt(mn.y)} Mt in ${mn.x} to ` +
+          `${fmtInt(mx.y)} Mt in ${mx.x}${recordNote} (${SRC.emitters}). ` +
+          'Ask compare_emitters for the country ranking, or query_range for a change.'
         return {
           speech,
-          data: { ok: true, year: pt.year, fertilizer: pt.x, yield: pt.y, units: { x: 'kg/ha', y: 'kg/ha' } },
-          mirror: scatterRing('yield-fertilizer', pt.year, `${round(pt.y)} kg/ha yield`, `${round(pt.x)} kg/ha fertilizer · ${pt.year}`),
+          data: { ok: true, min: { year: mn.x, value: mn.y }, max: { year: mx.x, value: mx.y }, unit: 'Mt CO₂' },
+          mirror: hlPoint('co2-emitters', mx.x, `${fmtInt(mx.y)} Mt`, `peak · ${mx.x}`),
+        }
+      },
+    },
+    {
+      name: describeTrendToolName('co2-emitters'),
+      description:
+        'Narrate the global CO₂ emissions curve — the industrial rise, the acceleration, ' +
+        'and the still-standing record. Ask compare_emitters for who emits it, or ' +
+        'query_range for any window.',
+      inputSchema: { type: 'object', properties: {} },
+      argsSummary: () => 'co2-emitters_describe_trend()',
+      execute: () => {
+        const y1950 = minBy(s, (p) => Math.abs(p.x - 1950))
+        const speech =
+          `Global fossil CO₂ rose from ${fmtInt(first.y)} Mt in ${first.x} to ${fmtInt(y1950.y)} Mt by ${y1950.x} ` +
+          `and then took off — ${fmtInt(last.y)} Mt in ${last.x}, a record and still rising (${SRC.emitters}). ` +
+          `${ranked[0].country} alone now emits ${fmtInt(ranked[0].value)} Mt. ` +
+          'Ask compare_emitters for the full ranking, or find_extremes for the peak.'
+        return {
+          speech,
+          data: { id: 'co2-emitters', headline: getChart('co2-emitters')?.headline() },
+          mirror: hlRange('co2-emitters', first.x, last.x, `${fmtInt(last.y)} Mt by ${last.x}`),
+        }
+      },
+    },
+    {
+      name: 'co2-emitters_compare_emitters',
+      description:
+        `Rank the six biggest emitting economies by latest-year fossil CO₂ (${SRC.emitters}) ` +
+        'and say how far ahead the leader is. Emphasises the top bar. Ask describe_trend ' +
+        'for the global time story.',
+      inputSchema: { type: 'object', properties: {} },
+      argsSummary: () => 'co2-emitters_compare_emitters()',
+      execute: () => {
+        const top = ranked[0]
+        const second = ranked[1]
+        const third = ranked[2]
+        const list = ranked.map((e2) => `${e2.country} ${fmtInt(e2.value)}`).join(', ')
+        const vsNextTwo = top.value > second.value + third.value ? ' — more than the next two combined' : ''
+        const speech =
+          `${top.country} emits the most: ${fmtInt(top.value)} Mt of CO₂ in ${top.year}${vsNextTwo}. ` +
+          `The ranking (Mt): ${list} (${SRC.emitters}). ` +
+          'Ask describe_trend for how the global total got here.'
+        return {
+          speech,
+          data: { ok: true, year: top.year, ranking: ranked.map((e2) => ({ country: e2.country, value: e2.value })), unit: 'Mt CO₂' },
+          mirror: barEmphasis('co2-emitters', top.country, `${fmtInt(top.value)} Mt`, `top emitter · ${top.year}`),
+        }
+      },
+    },
+    sonifyTool('co2-emitters', {
+      values: s.map((p) => p.y),
+      period: `${first.x}–${last.x}`,
+      peakWithUnit: `${fmtInt(peak.y)} Mt`,
+      peakLabel: String(peak.x),
+    }),
+  ]
+}
+
+// --- wealth-carbon (scatter) -------------------------------------------------
+
+function wealthFamily(): ToolDef[] {
+  const pts = wealthCarbon.points
+  const r = pearson(pts.map((p) => p.x), pts.map((p) => p.y))
+  const topCo2 = maxBy(pts, (p) => p.y)
+  const lowCo2 = minBy(pts, (p) => p.y)
+  const topGdp = maxBy(pts, (p) => p.x)
+
+  return [
+    {
+      name: 'wealth-carbon_describe_relationship',
+      description:
+        'Compute and explain the wealth→carbon relationship: the Pearson correlation ' +
+        `between GDP per capita and CO₂ per capita across ${pts.length} countries, with the ` +
+        'countries that break the pattern. Ask query_nearest for a specific country.',
+      inputSchema: { type: 'object', properties: {} },
+      argsSummary: () => 'wealth-carbon_describe_relationship()',
+      execute: () => {
+        const speech =
+          `Across ${pts.length} countries in ${wealthCarbon.year}, wealth and carbon are strongly linked: ` +
+          `Pearson r≈${round(r, 2)} between GDP per capita and CO₂ per capita. The spread runs ` +
+          `${round(lowCo2.y, 2)} t/person (${lowCo2.country}) to ${round(topCo2.y, 1)} t (${topCo2.country}) — ` +
+          `yet ${topGdp.country}, the richest at $${fmtInt(topGdp.x)}, emits ${round(topGdp.y, 1)} t, so income is ` +
+          `not destiny (${SRC.wealth}). Ask query_nearest for any single country.`
+        return {
+          speech,
+          data: { ok: true, r: Number(round(r, 2)), year: wealthCarbon.year, countries: pts.length },
+          mirror: scatterRing('wealth-carbon', topCo2.country, `r≈${round(r, 2)}`, `${topCo2.country}: $${fmtInt(topCo2.x)} → ${round(topCo2.y, 1)} t/person`),
+        }
+      },
+    },
+    {
+      name: 'wealth-carbon_query_nearest',
+      description:
+        'Return the GDP-per-capita / CO₂-per-capita point for a country (by name), or ' +
+        'the nearest country to a given GDP (x, $) or emissions (y, t/person). Rings ' +
+        'that dot. Ask describe_relationship for the overall correlation.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          country: { type: 'string', description: 'Country name, e.g. "India".' },
+          x: { type: 'number', description: 'Optional: GDP per capita ($) to match instead.' },
+          y: { type: 'number', description: 'Optional: t CO₂ per capita to match instead.' },
+        },
+      },
+      argsSummary: (a) => {
+        const c = String((a as { country?: unknown }).country ?? '').trim()
+        const x = toNum((a as { x?: unknown }).x)
+        const yy = toNum((a as { y?: unknown }).y)
+        if (c) return `wealth-carbon_query_nearest(${c})`
+        if (x !== null) return `wealth-carbon_query_nearest(x:${x})`
+        if (yy !== null) return `wealth-carbon_query_nearest(y:${yy})`
+        return 'wealth-carbon_query_nearest(top)'
+      },
+      execute: (a) => {
+        const c = String((a as { country?: unknown }).country ?? '').trim().toLowerCase()
+        const x = toNum((a as { x?: unknown }).x)
+        const yy = toNum((a as { y?: unknown }).y)
+        let pt = topCo2
+        let how = 'highest per-capita emitter'
+        if (c) {
+          const found = pts.find((p) => p.country.toLowerCase().includes(c) || p.code.toLowerCase() === c)
+          if (!found) {
+            return {
+              speech:
+                `No "${c}" among the ${pts.length} plotted countries. ` +
+                'Ask describe_relationship for the overall picture, or name another country.',
+              data: { ok: false, countries: pts.map((p) => p.country) },
+            }
+          }
+          pt = found
+          how = 'matched by name'
+        } else if (x !== null) {
+          pt = minBy(pts, (p) => Math.abs(p.x - x))
+          how = `nearest GDP to $${fmtInt(x)}`
+        } else if (yy !== null) {
+          pt = minBy(pts, (p) => Math.abs(p.y - yy))
+          how = `nearest emissions to ${round(yy, 1)} t/person`
+        }
+        const speech =
+          `${pt.country} (${how}): GDP per capita $${fmtInt(pt.x)}, emitting ${round(pt.y, 2)} tonnes of CO₂ ` +
+          `per person in ${wealthCarbon.year} (${SRC.wealth}). Ask describe_relationship for the overall correlation.`
+        return {
+          speech,
+          data: { ok: true, country: pt.country, gdp_per_capita: pt.x, co2_per_capita: pt.y, year: wealthCarbon.year },
+          mirror: scatterRing('wealth-carbon', pt.country, `${round(pt.y, 2)} t/person`, `$${fmtInt(pt.x)} GDP/capita · ${pt.country}`),
         }
       },
     },
   ]
 }
 
-// --- exchange-rate (live) ---------------------------------------------------
+// --- co2-live (live) ---------------------------------------------------------
 
-function exchangeFamily(): ToolDef[] {
-  // Read the SESSION-LOCAL live state at build time. `refreshExchangeSurface()`
-  // rebuilds this family on every tick, so `current_value`'s DESCRIPTION carries
-  // the latest rate and getTools() visibly changes over the session.
-  const rate = getCurrentRate()
+function liveFamily(): ToolDef[] {
+  // Read the SESSION-LOCAL live state at build time. `refreshLiveSurface()` (in
+  // workspace.ts) rebuilds this family on every tick while commissioned, so
+  // `current_value`'s DESCRIPTION carries the latest ppm and getTools() visibly
+  // changes over the session.
+  const ppm = getCurrentRate()
   const liveValues = getLiveValues()
   const livePeak = liveValues.reduce((m, v) => (v > m ? v : m), liveValues[0])
 
   return [
     {
-      name: 'exchange-rate_current_value',
+      name: 'co2-live_current_value',
       description:
-        `Get the live ZMW/USD rate — last tick ${round(rate, 2)} (simulated feed, re-registered every tick). ` +
+        `Get the live CO₂ concentration at Mauna Loa — last tick ${round(ppm, 2)} ppm ` +
+        '(simulated feed seeded from the real latest weekly mean, re-registered every tick). ' +
         "Ask session_stats for this session's range.",
       inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'exchange-rate_current_value()',
+      argsSummary: () => 'co2-live_current_value()',
       execute: () => {
         const s = getSessionStats()
         const speech =
-          `The live ZMW/USD rate is ${round(s.current, 2)} (${SRC.exchange}). ` +
-          `This session has ticked ${s.tickCount} time${s.tickCount === 1 ? '' : 's'} from the real seed ${round(s.seed, 2)}. ` +
-          'This tool re-registers each tick, so its listing in getTools() changes over time. Ask session_stats for the range.'
+          `CO₂ is at ${round(s.current, 2)} ppm right now (${SRC.live}) — versus roughly 280 ppm before ` +
+          `the industrial era. This session has ticked ${s.tickCount} time${s.tickCount === 1 ? '' : 's'} from the ` +
+          `real seed ${round(s.seed, 2)}. This tool re-registers each tick, so its listing in getTools() changes ` +
+          'over time. Ask session_stats for the range.'
         return {
           speech,
-          data: { ok: true, value: s.current, ticks: s.tickCount, seed: s.seed, unit: 'ZMW/USD', simulated: exchange.live_simulated },
-          mirror: hlPoint('exchange-rate', 0, `${round(s.current, 2)} ZMW/USD`, `live · tick ${s.tickCount}`),
+          data: { ok: true, value: s.current, ticks: s.tickCount, seed: s.seed, unit: 'ppm', simulated: co2Live.live_simulated },
+          mirror: hlPoint('co2-live', 0, `${round(s.current, 2)} ppm`, `live · tick ${s.tickCount}`),
         }
       },
     },
     {
-      name: 'exchange-rate_session_stats',
+      name: 'co2-live_session_stats',
       description:
-        "Summarise THIS browsing session's ZMW/USD feed: ticks seen, min, max and range — " +
+        "Summarise THIS browsing session's CO₂ feed: ticks seen, min, max and range in ppm — " +
         'state that exists only in your session and is in no dataset. Ask current_value for the latest tick.',
       inputSchema: { type: 'object', properties: {} },
-      argsSummary: () => 'exchange-rate_session_stats()',
+      argsSummary: () => 'co2-live_session_stats()',
       execute: () => {
         const s = getSessionStats()
         const secs = Math.round(s.elapsedMs / 1000)
@@ -592,29 +630,29 @@ function exchangeFamily(): ToolDef[] {
             ? 'No ticks yet this session'
             : `This session has seen ${s.tickCount} tick${s.tickCount === 1 ? '' : 's'} over ~${secs}s`
         const speech =
-          `${seen}. The rate ranged ${round(s.min, 2)}–${round(s.max, 2)} ZMW/USD ` +
-          `(range ${round(s.range, 2)}), now ${round(s.current, 2)}, walking from the real seed ${round(s.seed, 2)} (${SRC.exchange}). ` +
+          `${seen}. The feed ranged ${round(s.min, 2)}–${round(s.max, 2)} ppm ` +
+          `(range ${round(s.range, 3)}), now ${round(s.current, 2)}, walking from the real seed ${round(s.seed, 2)} (${SRC.live}). ` +
           'These values exist only in your browser session — no offline model or dataset has them. Ask current_value for the latest tick.'
         return {
           speech,
-          data: { ok: true, ticks: s.tickCount, min: s.min, max: s.max, range: Number(round(s.range, 2)), current: s.current, seed: s.seed, elapsedMs: s.elapsedMs, unit: 'ZMW/USD' },
-          mirror: hlPoint('exchange-rate', 0, `${round(s.min, 2)}–${round(s.max, 2)} ZMW/USD`, `${s.tickCount} ticks · range ${round(s.range, 2)}`),
+          data: { ok: true, ticks: s.tickCount, min: s.min, max: s.max, range: Number(round(s.range, 3)), current: s.current, seed: s.seed, elapsedMs: s.elapsedMs, unit: 'ppm' },
+          mirror: hlPoint('co2-live', 0, `${round(s.min, 2)}–${round(s.max, 2)} ppm`, `${s.tickCount} ticks · range ${round(s.range, 3)}`),
         }
       },
     },
-    sonifyTool('exchange-rate', {
+    sonifyTool('co2-live', {
       values: liveValues,
-      period: `${liveValues.length} closes`,
-      peakWithUnit: `${round(livePeak, 2)} ZMW/USD`,
+      period: `${liveValues.length} weekly means`,
+      peakWithUnit: `${round(livePeak, 2)} ppm`,
       peakLabel: 'the live feed',
       // Read the session-accumulated buffer at play time so a grown feed is heard.
       dynamic: () => {
         const v = getLiveValues()
-        const pk = v.reduce((m, x) => (x > m ? x : m), v[0])
+        const pk = v.reduce((m, x2) => (x2 > m ? x2 : m), v[0])
         return {
           values: v,
-          period: `${v.length} closes incl. this session's ticks`,
-          peakWithUnit: `${round(pk, 2)} ZMW/USD`,
+          period: `${v.length} readings incl. this session's ticks`,
+          peakWithUnit: `${round(pk, 2)} ppm`,
           peakLabel: 'the live feed',
         }
       },
@@ -625,10 +663,10 @@ function exchangeFamily(): ToolDef[] {
 // --- Family assembly --------------------------------------------------------
 
 const FAMILIES: Record<string, () => ToolDef[]> = {
-  'maize-prices': maizeFamily,
-  'under5-mortality': mortalityFamily,
-  'yield-fertilizer': yieldFamily,
-  'exchange-rate': exchangeFamily,
+  'temp-anomaly': tempFamily,
+  'co2-emitters': emittersFamily,
+  'wealth-carbon': wealthFamily,
+  'co2-live': liveFamily,
 }
 
 /** The focus-scoped surface definition for one chart. */
@@ -640,33 +678,28 @@ export function surfaceFor(chart: ChartMeta): SurfaceDef {
   }
 }
 
-/** Every chart's surface def, keyed by chart id. */
-export const CHART_SURFACES: Record<string, SurfaceDef> = Object.fromEntries(
-  CHARTS.map((chart) => [chart.id, surfaceFor(chart)]),
-)
-
 /**
- * Re-register the exchange family so `current_value`'s live description (and the
- * tools' session-local answers) reflect the latest tick. `registry.registerSurface`
- * re-applies the family only while exchange-rate is focused — cleanly aborting the
- * old family's controller and registering the fresh one, so `getTools()` shows the
- * new description with a constant tool COUNT and no listener leak. When not focused
- * it just updates the stored def for the next focus. Called on each live-feed tick.
+ * Build a chart's surface def by id (fresh each call — the co2-live family
+ * reads session state at build time). Registration happens ONLY through the
+ * workspace's `commissionView` / `create_view`, never at boot.
  */
-export function refreshExchangeSurface(): void {
-  const chart = getChart('exchange-rate')
-  if (chart) registry.registerSurface('exchange-rate', surfaceFor(chart))
+export function buildSurface(chartId: string): SurfaceDef | undefined {
+  const chart = getChart(chartId)
+  return chart ? surfaceFor(chart) : undefined
 }
 
 /** Registered tool names a chart's family exposes while focused (order preserved). */
 export function toolNamesFor(chartId: string): string[] {
-  return CHART_SURFACES[chartId]?.tools.map((t) => t.name) ?? []
+  return buildSurface(chartId)?.tools.map((t) => t.name) ?? []
 }
 
 /** How many tools a chart's family exposes while focused. */
 export function toolCountFor(chartId: string): number {
-  return CHART_SURFACES[chartId]?.tools.length ?? 0
+  return buildSurface(chartId)?.tools.length ?? 0
 }
+
+// Kept for callers that only need the registry side effect at focus time.
+export { registry }
 
 // Re-export for convenience so integration code has one import site.
 export { getChart }

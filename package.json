@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "check": "tsx src/lib/agent-a11y/registry.smoke.mts && tsx src/dashboard/orientation.check.mts && tsx src/dashboard/surfaces.check.mts && tsx src/dashboard/liveFeed.check.mts && tsx src/sonify.check.mts && tsx src/voice.check.mts && tsx src/voice-runner.check.mts && tsx --tsconfig tsconfig.app.json src/rail/Rail.check.tsx",
+    "check": "tsx src/lib/agent-a11y/registry.smoke.mts && tsx src/dashboard/orientation.check.mts && tsx src/dashboard/surfaces.check.mts && tsx src/dashboard/workspace.check.mts && tsx src/dashboard/liveFeed.check.mts && tsx src/sonify.check.mts && tsx src/voice.check.mts && tsx src/voice-runner.check.mts && tsx --tsconfig tsconfig.app.json src/rail/Rail.check.tsx",
     "lint": "oxlint",
     "preview": "vite preview",
     "fetch-data": "tsx scripts/fetch-data.ts"

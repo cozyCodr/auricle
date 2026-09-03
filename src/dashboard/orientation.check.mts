@@ -1,13 +1,16 @@
 /**
- * orientation.check.mts — browserless check for the 2.2 orientation tools.
+ * orientation.check.mts — browserless check for the global orientation tools.
  *
  * Installs the same in-memory WebMCP mock the registry smoke test uses, then:
- *  - registers the three global tools + the four chart surfaces,
- *  - executes describe_screen and asserts real figures appear (12.11, 48.4),
- *  - executes list_visualizations and asserts all four ids appear,
- *  - executes focus_chart(maize-prices) then focus_chart(under5-mortality) and
- *    asserts getTools() swaps families (maize gone, mortality present) while the
- *    three globals stay registered throughout.
+ *  - registers the five global tools (NO chart surfaces — those are born on
+ *    commission; the lifecycle itself is covered by workspace.check.mts),
+ *  - executes describe_screen on the SHELF and asserts it narrates the raw
+ *    tables (real row counts, "Zero answers") and steers to create_view,
+ *  - executes list_visualizations on the shelf (all four ids, zero views),
+ *  - commissions two views and asserts describe_screen/list_visualizations
+ *    flip to the workspace story with real headline figures (+1.28, 38,599),
+ *  - asserts focus_chart swaps families between commissioned views while the
+ *    globals stay registered, and handles unknown/uncommissioned ids helpfully.
  *
  * Run:  npx tsx src/dashboard/orientation.check.mts
  */
@@ -62,7 +65,8 @@ async function exec(name: string, args: Record<string, unknown> = {}): Promise<s
   return result.content[0].text
 }
 
-const GLOBALS = ['describe_screen', 'list_visualizations', 'focus_chart']
+const GLOBALS = ['describe_screen', 'list_visualizations', 'create_view', 'clear_workspace', 'focus_chart']
+const ALL_IDS = ['temp-anomaly', 'co2-emitters', 'wealth-carbon', 'co2-live']
 
 async function main() {
   installMockModelContext()
@@ -70,60 +74,64 @@ async function main() {
   // Import AFTER the mock is installed.
   const { registerOrientationTools } = await import('./orientation.ts')
   const { registry } = await import('../lib/agent-a11y/registry.ts')
-  const { CHART_SURFACES } = await import('./surfaces.ts')
-  const { CHARTS } = await import('./charts.ts')
+  const { toolNamesFor } = await import('./surfaces.ts')
 
   assert.equal(registry.isAvailable(), true, 'isAvailable() true with mock present')
 
   registerOrientationTools()
-  for (const chart of CHARTS) registry.registerSurface(chart.id, CHART_SURFACES[chart.id])
 
-  // Only globals registered before any focus.
-  assert.deepEqual(await toolNames(), [...GLOBALS].sort(), 'only globals before focus')
+  // Only globals registered at boot — the shelf has no chart surfaces.
+  assert.deepEqual(await toolNames(), [...GLOBALS].sort(), 'only the five globals at boot')
 
-  // describe_screen — real figures present.
-  const desc = await exec('describe_screen')
-  assert.ok(desc.includes('12.11'), 'describe_screen speech contains maize peak 12.11')
-  assert.ok(desc.includes('48.4'), 'describe_screen speech contains under-5 48.4')
-  assert.ok(desc.includes('focus_chart'), 'describe_screen steers to focus_chart')
+  // describe_screen — the shelf story, with real row counts.
+  const shelfDesc = await exec('describe_screen')
+  assert.ok(shelfDesc.includes('Zero answers'), 'shelf describe_screen tells the truth: zero answers')
+  assert.ok(shelfDesc.includes('146 rows'), 'shelf describe_screen counts the real GISTEMP rows')
+  assert.ok(shelfDesc.includes('create_view'), 'shelf describe_screen steers to create_view')
+  for (const id of ALL_IDS) assert.ok(shelfDesc.includes(id), `shelf describe_screen names ${id}`)
 
-  // list_visualizations — all four ids present.
-  const list = await exec('list_visualizations')
-  for (const id of ['maize-prices', 'under5-mortality', 'yield-fertilizer', 'exchange-rate']) {
-    assert.ok(list.includes(id), `list_visualizations mentions ${id}`)
-  }
+  // list_visualizations — all four ids on the shelf, none commissioned.
+  const shelfList = await exec('list_visualizations')
+  for (const id of ALL_IDS) assert.ok(shelfList.includes(id), `list_visualizations mentions ${id}`)
+  assert.ok(shelfList.includes('No views yet'), 'list_visualizations says the workspace is empty')
 
-  // focus_chart(maize-prices) → globals + maize family (3.2 expanded the family).
-  const maizeFamilyNames = CHART_SURFACES['maize-prices'].tools.map((t) => t.name)
-  const maizeSpeech = await exec('focus_chart', { chart_id: 'maize-prices' })
-  assert.ok(maizeSpeech.startsWith('Focused Maize meal retail price.'), 'focus speech names maize')
-  assert.deepEqual(
-    await toolNames(),
-    [...GLOBALS, ...maizeFamilyNames].sort(),
-    'focus(maize): globals + maize family',
-  )
+  // Commission two views, then re-orient.
+  const tempSpeech = await exec('create_view', { dataset: 'temp-anomaly' })
+  assert.ok(tempSpeech.includes('came online'), 'create_view narrates the family birth')
+  await exec('create_view', { dataset: 'co2-emitters' })
 
-  // focus_chart(under5-mortality) → maize family gone, mortality present, globals intact.
-  const mortalityFamilyNames = CHART_SURFACES['under5-mortality'].tools.map((t) => t.name)
-  await exec('focus_chart', { chart_id: 'under5-mortality' })
+  const wsDesc = await exec('describe_screen')
+  assert.ok(wsDesc.includes('+1.28'), 'workspace describe_screen carries the real record (+1.28 °C)')
+  assert.ok(wsDesc.includes('38,599'), 'workspace describe_screen carries the real 2024 world total')
+  assert.ok(wsDesc.includes('wealth-carbon'), 'workspace describe_screen names the uncommissioned datasets')
+
+  const wsList = await exec('list_visualizations')
+  assert.ok(wsList.includes('focused'), 'list_visualizations marks the focused view')
+  assert.ok(wsList.includes('On the shelf'), 'list_visualizations lists the remaining shelf datasets')
+
+  // focus_chart(temp-anomaly) → globals + temp family; emitters family gone.
+  const tempFamilyNames = toolNamesFor('temp-anomaly')
+  const focusSpeech = await exec('focus_chart', { chart_id: 'temp-anomaly' })
+  assert.ok(focusSpeech.startsWith('Focused Global temperature anomaly.'), 'focus speech names the view')
   const afterSwap = await toolNames()
   assert.deepEqual(
     afterSwap,
-    [...GLOBALS, ...mortalityFamilyNames].sort(),
-    'focus(under5): globals + mortality family only',
+    [...GLOBALS, ...tempFamilyNames].sort(),
+    'focus(temp-anomaly): globals + temp family only',
   )
-  assert.ok(!afterSwap.includes('maize-prices_describe_trend'), 'maize family unregistered after swap')
-  assert.ok(afterSwap.includes('under5-mortality_describe_trend'), 'mortality family present after swap')
+  assert.ok(!afterSwap.includes('co2-emitters_describe_trend'), 'emitters family unregistered after swap')
   for (const g of GLOBALS) assert.ok(afterSwap.includes(g), `global ${g} still registered after swaps`)
 
-  // Unknown id: helpful, non-throwing.
+  // Uncommissioned id: helpful, steers to create_view. Unknown id: lists valid ids.
+  const uncommissioned = await exec('focus_chart', { chart_id: 'co2-live' })
+  assert.ok(uncommissioned.includes('create_view'), 'focus_chart on an uncommissioned dataset steers to create_view')
   const bad = await exec('focus_chart', { chart_id: 'nope' })
   assert.ok(bad.includes('Valid ids'), 'unknown chart_id returns a helpful message')
 
   // Print sample speech for the integrating agent to eyeball.
-  console.log('\n--- describe_screen ---\n' + desc)
-  console.log('\n--- focus_chart(maize-prices) ---\n' + maizeSpeech)
-  console.log('\n--- list_visualizations ---\n' + list)
+  console.log('\n--- describe_screen (shelf) ---\n' + shelfDesc)
+  console.log('\n--- describe_screen (workspace) ---\n' + wsDesc)
+  console.log('\n--- list_visualizations (workspace) ---\n' + wsList)
 
   console.log('\nok — all orientation-tool assertions passed')
 }

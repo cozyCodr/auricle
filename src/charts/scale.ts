@@ -49,7 +49,7 @@ export function buildPath(
  * The threshold is derived from the data itself — the median spacing between
  * points times `factor` — so it needs no per-chart tuning: a monthly series
  * (median step 1 month) breaks on any gap over ~1.75 months; a yearly series
- * breaks on any gap over ~1.75 years. This is what makes the maize line render
+ * breaks on any gap over ~1.75 years. This is what makes a gappy line render
  * as two polylines across its real 2022-08 → 2023-11 data gap.
  */
 export function computeSegments(points: readonly LinePoint[], factor = 1.75): LinePoint[][] {

@@ -1,14 +1,14 @@
 /**
- * Auricle data pipeline — bakes REAL Zambia data to src/data/*.json.
+ * Auricle data pipeline — bakes REAL climate data to src/data/*.json.
  *
  * Run:  npm run fetch-data   (alias for: npx tsx scripts/fetch-data.ts)
  *
  * Every series is fetched from a real, keyless public source at build time and
  * written to disk so judges can `npm run build` with no network access.
  * NO values are hand-invented. Sources:
- *   - World Bank Open Data API (keyless)      https://api.worldbank.org/v2
- *   - WFP food prices via HDX (keyless CSV)    https://data.humdata.org
- *   - fawazahmed0 currency-api (keyless daily) https://github.com/fawazahmed0/exchange-api
+ *   - NASA GISTEMP v4 (keyless CSV)            https://data.giss.nasa.gov/gistemp/
+ *   - Our World in Data grapher CSVs (keyless) https://ourworldindata.org/grapher/
+ *   - NOAA GML Mauna Loa weekly CO₂ (keyless)  https://gml.noaa.gov/ccgg/trends/
  *
  * Each output file uses the envelope:
  *   { source, source_url, fetched_at, unit, note, ...series }
@@ -26,12 +26,6 @@ const FETCHED_AT = new Date().toISOString();
 // small helpers
 // --------------------------------------------------------------------------
 
-async function getJSON(url: string): Promise<any> {
-  const res = await fetch(url, { headers: { "user-agent": "auricle-data-pipeline" } });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
-  return res.json();
-}
-
 async function getText(url: string): Promise<string> {
   const res = await fetch(url, { headers: { "user-agent": "auricle-data-pipeline" } });
   if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
@@ -44,20 +38,7 @@ async function write(name: string, obj: unknown): Promise<void> {
   console.log(`  ✓ wrote src/data/${name}`);
 }
 
-const WB = (country: string, code: string, extra = "") =>
-  `https://api.worldbank.org/v2/country/${country}/indicator/${code}?format=json&per_page=500${extra}`;
-
-/** Fetch a single World Bank indicator -> [{ year:number, value:number }] ascending. */
-async function wbSeries(country: string, code: string): Promise<{ year: number; value: number }[]> {
-  const data = await getJSON(WB(country, code));
-  const rows = (data?.[1] ?? []) as any[];
-  return rows
-    .filter((r) => r.value !== null && r.value !== undefined)
-    .map((r) => ({ year: Number(r.date), value: Number(r.value) }))
-    .sort((a, b) => a.year - b.year);
-}
-
-/** Quote-aware CSV parser (handles the few markets with commas in their names). */
+/** Quote-aware CSV parser (handles commas inside quoted entity names). */
 function parseCSV(text: string): Record<string, string>[] {
   const rows: string[][] = [];
   let field = "";
@@ -83,182 +64,216 @@ function parseCSV(text: string): Record<string, string>[] {
 }
 
 // --------------------------------------------------------------------------
-// 1. HERO — maize meal (roller, white) retail price, ZMW/kg, monthly
-//    Source: WFP food prices for Zambia, hosted keyless on HDX.
-//    Reported unit switched from "KG" (<=2022) to "25 KG" bags (2023+); we
-//    normalise every observation to a per-kilogram price so the series is a
-//    single continuous line. A ~14-month coverage gap exists across the WFP
-//    methodology change (late 2022 -> late 2023) and is left as-is (no fill).
+// 1. HERO — NASA GISTEMP annual global mean temperature anomaly (°C)
+//    The J-D column is the January–December annual mean vs the 1951–1980
+//    baseline. Incomplete years print "***" and are skipped (never guessed).
 // --------------------------------------------------------------------------
 
-const HDX_MAIZE_CSV =
-  "https://data.humdata.org/dataset/3f74001c-3554-4c54-bd86-c66208563316/resource/d9a34dc4-ff1d-43bf-9592-03d12d027848/download/wfp_food_prices_zmb.csv";
+const GISTEMP_CSV = "https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv";
 
-function unitToKg(unit: string): number | null {
-  switch (unit) {
-    case "KG": return 1;
-    case "5 KG": return 5;
-    case "25 KG": return 25;
-    case "50 KG": return 50;
-    default: return null; // e.g. "Tin (20 L)" — volumetric, not normalised
-  }
-}
+async function buildTempAnomaly() {
+  console.log("[1/4] global temperature anomaly (NASA GISTEMP v4)…");
+  const raw = await getText(GISTEMP_CSV);
+  // First line is a human title ("Land-Ocean: Global Means"); the CSV starts at line 2.
+  const csv = raw.slice(raw.indexOf("\n") + 1);
+  const rows = parseCSV(csv);
 
-async function buildMaize() {
-  console.log("[1/4] maize meal retail price (WFP via HDX)…");
-  const csv = await getText(HDX_MAIZE_CSV);
-  const rows = parseCSV(csv).filter((r) => r.date && !r.date.startsWith("#"));
+  const points = rows
+    .filter((r) => /^\d{4}$/.test(r.Year) && r["J-D"] && r["J-D"] !== "***")
+    .map((r) => ({ x: Number(r.Year), y: Number(r["J-D"]) }))
+    .filter((p) => Number.isFinite(p.y))
+    .sort((a, b) => a.x - b.x);
 
-  const COMMODITY = "Maize meal (white, roller)";
-  const buckets = new Map<string, number[]>();
-  for (const r of rows) {
-    if (r.commodity !== COMMODITY) continue;
-    if (r.pricetype !== "Retail") continue;
-    if (r.priceflag !== "actual" && r.priceflag !== "aggregate") continue;
-    const kg = unitToKg(r.unit);
-    const price = Number(r.price);
-    if (!kg || !isFinite(price) || price <= 0) continue;
-    const month = r.date.slice(0, 7); // YYYY-MM
-    if (month < "2015-01") continue;
-    (buckets.get(month) ?? buckets.set(month, []).get(month)!).push(price / kg);
-  }
+  if (points.length < 100) throw new Error(`GISTEMP series too short (${points.length} years)`);
+  const peak = points.reduce((m, p) => (p.y > m.y ? p : m));
+  console.log(`      ${points.length} years ${points[0].x}–${points[points.length - 1].x}; max ${peak.y} °C in ${peak.x}`);
 
-  const points = [...buckets.entries()]
-    .map(([month, vals]) => ({
-      x: month,
-      y: Number((vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)),
-      n: vals.length, // # of market observations averaged
-    }))
-    .sort((a, b) => (a.x < b.x ? -1 : 1));
-
-  if (points.length < 24) throw new Error(`maize series too short (${points.length} months)`);
-
-  await write("maize-prices.json", {
-    source: "WFP (World Food Programme) — Zambia retail food prices, via HDX",
-    source_url: HDX_MAIZE_CSV,
+  await write("temp-anomaly.json", {
+    source: "NASA GISS Surface Temperature Analysis (GISTEMP v4), annual global mean",
+    source_url: GISTEMP_CSV,
     fetched_at: FETCHED_AT,
-    unit: "ZMW per kg (retail, national average across markets)",
+    unit: "°C anomaly vs the 1951–1980 average",
     note:
-      "National average retail price of white roller mealie-meal (Zambia's staple) in kwacha per kg, monthly; the 2015 baseline (~2 ZMW/kg) climbs ~5.6x to a Jan-2025 peak (~12 ZMW/kg) driven by the 2022 kwacha slide and the 2023-24 El Nino drought, easing after the 2025 harvest.",
-    commodity: COMMODITY,
-    normalization: "Prices reported per 25 KG bag (2023+) divided by 25 to a per-kg basis; pre-2023 already per kg. A ~14-month gap (late 2022 to late 2023) reflects a WFP methodology change and is not interpolated.",
+      `Annual (J-D) global mean land–ocean temperature anomaly, ${points[0].x}–${points[points.length - 1].x}. ` +
+      `The 19th-century readings sit around −0.2 °C; the curve crosses zero in the late 1970s and accelerates, ` +
+      `peaking at +${peak.y} °C in ${peak.x} — the warmest year in the instrumental record. Incomplete years are omitted, not estimated.`,
     points,
   });
 }
 
 // --------------------------------------------------------------------------
-// 2. Under-5 mortality (SH.DYN.MORT) — Zambia time series + comparators
+// 2. CO₂ emitters — OWID annual fossil CO₂: global total series + latest-year
+//    values for the six biggest emitting economies. The grapher "filtered" CSV
+//    keeps the download tiny (vs the ~60 MB full owid-co2-data.csv).
 // --------------------------------------------------------------------------
 
-async function buildUnder5() {
-  console.log("[2/4] under-5 mortality (World Bank SH.DYN.MORT)…");
-  const zmb = (await wbSeries("ZMB", "SH.DYN.MORT")).filter((p) => p.year >= 2000);
+const EMITTER_ENTITIES = "CHN~USA~IND~OWID_EU27~RUS~JPN~OWID_WRL";
+const OWID_EMITTERS_CSV =
+  "https://ourworldindata.org/grapher/annual-co2-emissions-per-country.csv" +
+  `?csvType=filtered&useColumnShortNames=true&country=${EMITTER_ENTITIES}`;
 
-  // latest single-year comparator bar-chart data
-  const codes = "ZMB;KEN;TZA;ZWE;ZAF;COD;NGA";
-  const data = await getJSON(
-    `https://api.worldbank.org/v2/country/${codes}/indicator/SH.DYN.MORT?format=json&per_page=100&mrnev=1`,
-  );
-  const compRows = (data?.[1] ?? []) as any[];
-  const comparators = compRows
-    .filter((r) => r.value !== null)
-    .map((r) => ({ country: r.country.value, code: r.countryiso3code, year: Number(r.date), value: Number(r.value) }))
+async function buildEmitters() {
+  console.log("[2/4] CO₂ emissions by country (Our World in Data / Global Carbon Budget)…");
+  const rows = parseCSV(await getText(OWID_EMITTERS_CSV));
+
+  const toMt = (t: string) => Math.round(Number(t) / 1e6); // tonnes → million tonnes
+
+  const world = rows
+    .filter((r) => r.code === "OWID_WRL" && Number(r.year) >= 1850 && r.emissions_total)
+    .map((r) => ({ x: Number(r.year), y: toMt(r.emissions_total) }))
+    .sort((a, b) => a.x - b.x);
+  if (world.length < 100) throw new Error(`world CO₂ series too short (${world.length} years)`);
+
+  const latestYear = world[world.length - 1].x;
+  const NAME_SHORT: Record<string, string> = {
+    CHN: "China",
+    USA: "United States",
+    IND: "India",
+    OWID_EU27: "EU-27",
+    RUS: "Russia",
+    JPN: "Japan",
+  };
+  const emitters = Object.keys(NAME_SHORT)
+    .map((code) => {
+      const r = rows
+        .filter((row) => row.code === code && row.emissions_total)
+        .sort((a, b) => Number(a.year) - Number(b.year))
+        .at(-1);
+      if (!r) throw new Error(`no emissions rows for ${code}`);
+      return { country: NAME_SHORT[code], code, year: Number(r.year), value: toMt(r.emissions_total) };
+    })
     .sort((a, b) => b.value - a.value);
 
-  await write("under5-mortality.json", {
-    source: "World Bank Open Data — Mortality rate, under-5 (SH.DYN.MORT)",
-    source_url: WB("ZMB", "SH.DYN.MORT"),
+  const worldLast = world[world.length - 1];
+  console.log(
+    `      world ${worldLast.y.toLocaleString()} Mt in ${worldLast.x}; top emitter ${emitters[0].country} ` +
+    `${emitters[0].value.toLocaleString()} Mt (${emitters[0].year})`,
+  );
+
+  await write("co2-emitters.json", {
+    source: "Our World in Data — Annual CO₂ emissions (Global Carbon Budget)",
+    source_url: OWID_EMITTERS_CSV,
     fetched_at: FETCHED_AT,
-    unit: "deaths per 1,000 live births",
+    unit: "million tonnes of CO₂ per year (fossil fuels + industry)",
     note:
-      "Zambia's under-5 mortality more than halved from 102.7 (2005) to 48.4 (2024) — a genuine public-health gain; the comparator bars put Zambia mid-pack among African peers (below Nigeria/DRC, above Kenya/Tanzania/South Africa).",
-    zambia_series: zmb.map((p) => ({ x: p.year, y: p.value })),
-    comparators_latest: comparators,
+      `Global fossil CO₂ emissions ${world[0].x}–${latestYear}: from ~${world[0].y.toLocaleString()} Mt in ${world[0].x} ` +
+      `to a record ${worldLast.y.toLocaleString()} Mt in ${worldLast.x} — still rising. The latest-year bars rank the six ` +
+      `biggest emitting economies; ${emitters[0].country} alone emits ${emitters[0].value.toLocaleString()} Mt, ` +
+      `more than the next two combined.`,
+    global_series: world,
+    emitters_latest: emitters,
   });
 }
 
 // --------------------------------------------------------------------------
-// 3. Scatter — cereal yield vs fertilizer consumption, by year
+// 3. Scatter — GDP per capita vs CO₂ per capita, latest common year, a spread
+//    of ~26 countries across income levels (OWID co2-emissions-vs-gdp grapher).
+//    Country SELECTION is editorial; every value is fetched, never typed in.
 // --------------------------------------------------------------------------
 
-async function buildScatter() {
-  console.log("[3/4] cereal yield vs fertilizer (World Bank)…");
-  const yield_ = await wbSeries("ZMB", "AG.YLD.CREL.KG");     // kg/ha
-  const fert = await wbSeries("ZMB", "AG.CON.FERT.ZS");       // kg/ha arable
-  const fertBy = new Map(fert.map((p) => [p.year, p.value]));
+const OWID_GDP_CSV =
+  "https://ourworldindata.org/grapher/co2-emissions-vs-gdp.csv?csvType=full&useColumnShortNames=true";
 
-  const points = yield_
-    .filter((p) => fertBy.has(p.year))
-    .map((p) => ({
-      year: p.year,
-      x: Number(fertBy.get(p.year)!.toFixed(2)), // fertilizer kg/ha
-      y: Math.round(p.value),                     // cereal yield kg/ha
-    }))
-    .sort((a, b) => a.year - b.year);
+/** A deliberate spread across income levels (selection, not data). */
+const SCATTER_CODES = [
+  "USA", "CHE", "NOR", "AUS", "CAN", "DEU", "JPN", "KOR", "GBR", "FRA",
+  "POL", "RUS", "CHN", "MEX", "BRA", "TUR", "ZAF", "IDN", "IND", "VNM",
+  "EGY", "NGA", "KEN", "BGD", "PAK", "ETH",
+];
 
-  if (points.length < 10) throw new Error(`scatter pair too short (${points.length} points)`);
+async function buildWealthCarbon() {
+  console.log("[3/4] GDP per capita vs CO₂ per capita (Our World in Data)…");
+  const rows = parseCSV(await getText(OWID_GDP_CSV));
+  const wanted = new Set(SCATTER_CODES);
 
-  await write("yield-fertilizer.json", {
-    source: "World Bank Open Data — Cereal yield (AG.YLD.CREL.KG) & Fertilizer consumption (AG.CON.FERT.ZS)",
-    source_url: WB("ZMB", "AG.YLD.CREL.KG"),
-    source_url_x: WB("ZMB", "AG.CON.FERT.ZS"),
+  // Latest year where BOTH values exist for (nearly) every selected country.
+  const byYear = new Map<number, Map<string, { country: string; gdp: number; co2: number }>>();
+  for (const r of rows) {
+    if (!wanted.has(r.code)) continue;
+    const gdp = Number(r.gdp_per_capita);
+    const co2 = Number(r.emissions_total_per_capita);
+    if (!r.gdp_per_capita || !r.emissions_total_per_capita) continue;
+    if (!Number.isFinite(gdp) || !Number.isFinite(co2)) continue;
+    const year = Number(r.year);
+    if (!byYear.has(year)) byYear.set(year, new Map());
+    byYear.get(year)!.set(r.code, { country: r.entity, gdp, co2 });
+  }
+  const year = [...byYear.entries()]
+    .filter(([, m]) => m.size >= SCATTER_CODES.length - 2)
+    .map(([y]) => y)
+    .sort((a, b) => b - a)[0];
+  if (!year) throw new Error("no common year with GDP + CO₂ per capita for the selected countries");
+
+  const m = byYear.get(year)!;
+  const points = SCATTER_CODES
+    .filter((code) => m.has(code))
+    .map((code) => {
+      const v = m.get(code)!;
+      return { country: v.country, code, x: Math.round(v.gdp), y: Number(v.co2.toFixed(2)) };
+    })
+    .sort((a, b) => a.x - b.x);
+  if (points.length < 20) throw new Error(`scatter too sparse (${points.length} countries)`);
+
+  const top = points.reduce((mx, p) => (p.y > mx.y ? p : mx));
+  console.log(`      ${points.length} countries, year ${year}; highest per-capita ${top.country} ${top.y} t`);
+
+  await write("wealth-carbon.json", {
+    source: "Our World in Data — CO₂ emissions per capita vs GDP per capita (Global Carbon Budget; Maddison Project)",
+    source_url: OWID_GDP_CSV,
     fetched_at: FETCHED_AT,
-    unit: "x = fertilizer consumption (kg per ha of arable land); y = cereal yield (kg per ha)",
+    unit: "x = GDP per capita (international-$, 2011 prices); y = tonnes CO₂ per person per year",
     note:
-      "Each point is one year for Zambia: fertilizer use (x) rose ~7x from 2000 (11 kg/ha) to 2023 (77 kg/ha) while cereal yields (y) drifted up but stayed rain-dependent and noisy — a real but weak positive relationship, not a clean line.",
-    x_label: "Fertilizer consumption (kg/ha arable land)",
-    y_label: "Cereal yield (kg/ha)",
+      `${points.length} countries across income levels in ${year} (the latest year with both series). ` +
+      `Wealth and carbon are strongly linked: per-capita emissions run from under 0.5 t in the poorest economies ` +
+      `to ${top.y} t (${top.country}) — but countries at similar incomes differ several-fold, so the link is not destiny.`,
+    year,
+    x_label: "GDP per capita (international-$)",
+    y_label: "CO₂ per capita (t/year)",
     points,
   });
 }
 
 // --------------------------------------------------------------------------
-// 4. ZMW/USD — recent daily closing series (live_simulated for the UI feed)
+// 4. LIVE — NOAA Mauna Loa weekly mean CO₂ (ppm). Comment-prefixed CSV; the
+//    last ~76 valid weeks are baked and the runtime replays the latest value
+//    as a clearly-labelled simulated live feed.
 // --------------------------------------------------------------------------
 
-async function buildFX() {
-  console.log("[4/4] ZMW/USD daily (fawazahmed0 currency-api)…");
-  const base = "https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api";
+const NOAA_WEEKLY_CSV = "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.csv";
+const LIVE_WEEKS = 76;
 
-  // Anchor on the API's latest published date, then walk back ~40 calendar days.
-  const latest = await getJSON(`${base}@latest/v1/currencies/usd.min.json`);
-  const anchor = new Date(latest.date + "T00:00:00Z");
+async function buildCo2Live() {
+  console.log("[4/4] CO₂ at Mauna Loa, weekly (NOAA GML)…");
+  const raw = await getText(NOAA_WEEKLY_CSV);
+  // Strip the "#"-prefixed license/description header lines.
+  const csv = raw.split("\n").filter((l) => !l.startsWith("#")).join("\n");
+  const rows = parseCSV(csv);
 
-  const dates: string[] = [];
-  for (let i = 0; i < 42; i++) {
-    const d = new Date(anchor);
-    d.setUTCDate(d.getUTCDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
+  const all = rows
+    .filter((r) => r.year && r.average && Number(r.average) > 0) // −999.99 = missing week
+    .map((r) => ({
+      x: `${r.year}-${String(Number(r.month)).padStart(2, "0")}-${String(Number(r.day)).padStart(2, "0")}`,
+      y: Number(Number(r.average).toFixed(2)),
+    }))
+    .sort((a, b) => (a.x < b.x ? -1 : 1));
+  if (all.length < LIVE_WEEKS) throw new Error(`NOAA weekly series too short (${all.length})`);
 
-  const results: { date: string; zmw: number }[] = [];
-  // fetch in small concurrent batches to stay polite
-  for (let i = 0; i < dates.length; i += 8) {
-    const batch = dates.slice(i, i + 8);
-    const settled = await Promise.allSettled(
-      batch.map(async (date) => {
-        const j = await getJSON(`${base}@${date}/v1/currencies/usd.min.json`);
-        const zmw = j?.usd?.zmw;
-        if (typeof zmw !== "number") throw new Error(`no zmw for ${date}`);
-        return { date, zmw: Number(zmw.toFixed(4)) };
-      }),
-    );
-    for (const s of settled) if (s.status === "fulfilled") results.push(s.value);
-  }
+  const points = all.slice(-LIVE_WEEKS);
+  const last = points[points.length - 1];
+  console.log(`      ${points.length} weeks ${points[0].x} → ${last.x}; latest ${last.y} ppm`);
 
-  results.sort((a, b) => (a.date < b.date ? -1 : 1));
-  const series = results.slice(-30); // last ~30 real daily closes
-  if (series.length < 10) throw new Error(`FX series too short (${series.length} points)`);
-
-  await write("exchange-rate.json", {
-    source: "fawazahmed0 currency-api (daily reference rates, keyless)",
-    source_url: `${base}@latest/v1/currencies/usd.min.json`,
+  await write("co2-live.json", {
+    source: "NOAA Global Monitoring Laboratory — Mauna Loa weekly mean CO₂",
+    source_url: NOAA_WEEKLY_CSV,
     fetched_at: FETCHED_AT,
-    unit: "ZMW per USD",
+    unit: "parts per million (ppm), weekly mean at Mauna Loa Observatory",
     note:
-      `Real recent daily USD->ZMW closes (${series[0].date} to ${series[series.length - 1].date}); the kwacha has strengthened from ~27 (mid-2025) toward ~19, reversing part of its 2022-24 slide. The runtime replays/perturbs this baseline as a clearly-labelled simulated live feed.`,
+      `The last ${points.length} real weekly means (${points[0].x} to ${last.x}), latest ${last.y} ppm — ` +
+      `versus ~280 ppm pre-industrial. The sawtooth is the Northern Hemisphere's breathing (May peak, ` +
+      `September trough) on a relentless upward trend. The runtime replays tiny perturbations from the ` +
+      `real latest value as a clearly-labelled simulated live feed.`,
     live_simulated: true,
-    points: series.map((r) => ({ x: r.date, y: r.zmw })),
+    points,
   });
 }
 
@@ -267,11 +282,11 @@ async function buildFX() {
 async function main() {
   console.log(`Auricle data pipeline — writing to ${DATA_DIR}`);
   console.log(`fetched_at = ${FETCHED_AT}\n`);
-  await buildMaize();
-  await buildUnder5();
-  await buildScatter();
-  await buildFX();
-  console.log("\nDone. All four datasets baked to src/data/.");
+  await buildTempAnomaly();
+  await buildEmitters();
+  await buildWealthCarbon();
+  await buildCo2Live();
+  console.log("\nDone. All four climate datasets baked to src/data/.");
 }
 
 main().catch((err) => {

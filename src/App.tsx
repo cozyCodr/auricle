@@ -1,9 +1,18 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import './App.css'
-import { CHARTS, registerDashboard, initFocus, useFocusedChart, setFocus, getChart, DEFAULT_FOCUS } from './dashboard'
+import {
+  CHARTS,
+  registerDashboard,
+  initFocus,
+  useFocusedChart,
+  setFocus,
+  getChart,
+  useWorkspace,
+  commissionView,
+  refreshLiveSurface,
+} from './dashboard'
 import { startLiveFeed, subscribeLiveFeed } from './dashboard/liveFeed'
-import { refreshExchangeSurface } from './dashboard/surfaces'
-import { ChartCard, useChartHighlight } from './charts'
+import { ChartCard, useChartHighlight, DataTable, tableFor, rowCountFor, TOTAL_ROWS } from './charts'
 import { Rail } from './rail/Rail'
 import { subscribeAudio, isAudioReady, armAudio } from './sonify'
 import { createVoice, isVoiceSupported, type VoiceState } from './voice'
@@ -68,9 +77,6 @@ function LevelBars() {
  */
 function VoiceMic() {
   // Feature-detect once. Hidden entirely where Web Speech is unavailable.
-  // The in-page voice rehearsal needs both Web Speech and the imperative
-  // WebMCP testing API. ChatGPT Site Tools are driven from the Codex
-  // conversation and do not necessarily expose executeTool() to page scripts.
   const supported = useMemo(
     () => isVoiceSupported() && isIntentExecutionAvailable(),
     [],
@@ -138,34 +144,115 @@ function VoiceMic() {
   )
 }
 
-// Register the agent layer once, at module load: the three global orientation
-// tools + a focusable surface per chart. Then sync the registry to the default
-// focus so the maize hero's tool family is registered from the first paint.
+// Register the agent layer once, at module load: the five global tools ONLY.
+// No chart surfaces exist at boot — the app is a raw data shelf, and a chart's
+// surface + tool family is born when create_view (or a shelf click) commissions
+// it. initFocus is a no-op on the shelf (nothing to focus yet).
 registerDashboard()
 initFocus()
 
 /**
- * Auricle — the dashboard you can interview.
- *
- * The header (from 1.1) plus the charts column: a large focused hero card and a
- * 3-across row of the remaining charts, which render dimmed and captioned
- * "unfocused — tools unregistered". Clicking a small card — or the agent calling
- * `focus_chart` — moves that chart into the hero slot via the shared focus
- * controller. The conversation rail is a placeholder here; it lands in 3.3.
+ * One dataset on the raw shelf: a header button (clicking it commissions the
+ * dataset's canonical view — the SAME code path as the create_view tool) above
+ * the full, dense real-data table.
  */
-function App() {
-  const focusedId = useFocusedChart() ?? DEFAULT_FOCUS
-  const heroChart = getChart(focusedId) ?? CHARTS[0]
-  const others = CHARTS.filter((c) => c.id !== heroChart.id)
+function ShelfDataset({ chartId }: { chartId: string }) {
+  const chart = getChart(chartId)
+  const model = tableFor(chartId)
+  if (!chart || !model) return null
+  const live = chart.kind === 'live'
+  return (
+    <section className="shelf__dataset" aria-label={`${chart.title} — raw data`}>
+      <button
+        type="button"
+        className="shelf__dataset-head"
+        onClick={() => commissionView(chartId)}
+        title={`Build the ${chart.title} view (same as create_view)`}
+      >
+        <span className="shelf__dataset-title">{chart.title}</span>
+        <span className="shelf__dataset-meta">
+          {' '}· {chart.source.split('—')[0].trim()} · {rowCountFor(chartId)} rows
+          {live ? ' · live' : ''}
+        </span>
+      </button>
+      <DataTable model={model} />
+    </section>
+  )
+}
+
+/**
+ * The raw data shelf — Auricle's initial state. No charts: four dense tables of
+ * real rows, a headline that tells the truth ("N rows. Zero answers."), and an
+ * invitation to commission views by asking. Clicking a dataset's header
+ * commissions its canonical view through the same path as create_view.
+ */
+function Shelf() {
+  return (
+    <div className="shelf">
+      <div className="shelf__lede">
+        <h2 className="shelf__headline">{TOTAL_ROWS.toLocaleString('en-US')} rows. Zero answers.</h2>
+        <p className="shelf__sub">
+          This is the planet's data as a screen reader meets it — readable, row by
+          row, and unanswerable. Ask, and the dashboard builds itself.
+        </p>
+      </div>
+      <div className="shelf__grid">
+        {CHARTS.map((c) => (
+          <ShelfDataset key={c.id} chartId={c.id} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The commissioned workspace: the focused view large, the rest in a row. */
+function Workspace() {
+  const views = useWorkspace()
+  const focusedId = useFocusedChart()
+  const heroView = views.find((v) => v.chartId === focusedId) ?? views[0]
+  const heroChart = getChart(heroView.chartId) ?? CHARTS[0]
+  const others = views.filter((v) => v.chartId !== heroView.chartId)
   // Mirror-driven: the focused chart's live highlight, painted on the hero.
   const highlight = useChartHighlight(heroChart.id)
 
-  // 4.3: start the ~5s simulated ZMW/USD feed and re-register the exchange family
-  // on every tick, so `current_value`'s description changes over time in getTools()
-  // and its session_stats are genuinely session-local. Cleaned up on unmount.
+  return (
+    <div className="charts-col">
+      <ChartCard chart={heroChart} variant="hero" onFocus={setFocus} highlight={highlight} />
+
+      {others.length > 0 && (
+        <div className="charts-row" role="list" aria-label="Other commissioned views — click to focus">
+          {others.map((v) => {
+            const c = getChart(v.chartId)
+            if (!c) return null
+            return (
+              <div role="listitem" key={v.chartId}>
+                <ChartCard chart={c} variant="small" onFocus={setFocus} />
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Auricle — the dashboard you can interview.
+ *
+ * Boots as the raw data shelf (no charts, four dense real-data tables). Views
+ * are commissioned — by the agent's `create_view` tool or a click on a shelf
+ * table's header — and appear with the focused view large and the rest in a
+ * row. `clear_workspace` returns everything to the shelf.
+ */
+function App() {
+  const views = useWorkspace()
+
+  // Start the ~5s simulated CO₂ feed and re-register the co2-live family on
+  // every tick (once commissioned), so `current_value`'s description changes
+  // over time in getTools() and its session stats are genuinely session-local.
   useEffect(() => {
     const stop = startLiveFeed()
-    const unsub = subscribeLiveFeed(refreshExchangeSurface)
+    const unsub = subscribeLiveFeed(refreshLiveSurface)
     return () => {
       unsub()
       stop()
@@ -194,10 +281,10 @@ function App() {
 
         <div className="app-header__titles">
           <div className="app-header__name">Auricle</div>
-          <div className="app-header__tagline">the dashboard you can interview</div>
+          <div className="app-header__tagline">interview the planet</div>
         </div>
 
-        <div className="app-header__pill">Zambia · six decades of open data</div>
+        <div className="app-header__note">climate · four real open datasets</div>
 
         <VoiceMic />
 
@@ -205,22 +292,11 @@ function App() {
       </header>
 
       <main className="app-main">
-        <h1 className="sr-only">Auricle — interviewable Zambia open-data dashboard</h1>
+        <h1 className="sr-only">Auricle — the climate dashboard you can interview</h1>
 
-        {/* Charts column */}
-        <div className="charts-col">
-          <ChartCard chart={heroChart} variant="hero" onFocus={setFocus} highlight={highlight} />
+        {views.length === 0 ? <Shelf /> : <Workspace />}
 
-          <div className="charts-row" role="list" aria-label="Other charts — click to focus">
-            {others.map((c) => (
-              <div role="listitem" key={c.id}>
-                <ChartCard chart={c} variant="small" onFocus={setFocus} />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Conversation + tool-activity rail (3.3) */}
+        {/* Conversation + tool-activity rail */}
         <Rail />
       </main>
     </div>

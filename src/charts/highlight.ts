@@ -17,7 +17,7 @@
  *  - `scatter-ring`    → ScatterChart: gold ring + tooltip on the year's dot.
  *
  * All numeric x/start/end are already in the TARGET chart's numeric x-domain
- * (maize: `monthIndexOf`; mortality: the raw year), so the render layer maps them
+ * (the lines: the calendar year; the live feed: sparkline index), so the render layer maps them
  * straight through.
  */
 
@@ -51,7 +51,7 @@ export interface HighlightRangeEvent extends MirrorShape {
   readonly label?: string
 }
 
-/** Emphasise one bar by its display label (e.g. "Zambia"). */
+/** Emphasise one bar by its display label (e.g. "China"). */
 export interface BarEmphasisEvent extends MirrorShape {
   readonly kind: 'bar-emphasis'
   readonly chartId: string
@@ -60,11 +60,11 @@ export interface BarEmphasisEvent extends MirrorShape {
   readonly detail?: string
 }
 
-/** Ring the scatter dot for a given year. */
+/** Ring the scatter dot whose point label matches (e.g. a country name). */
 export interface ScatterRingEvent extends MirrorShape {
   readonly kind: 'scatter-ring'
   readonly chartId: string
-  readonly year: number
+  readonly match: string
   readonly label?: string
   readonly detail?: string
 }
@@ -119,11 +119,11 @@ export function barEmphasis(
 
 export function scatterRing(
   chartId: string,
-  year: number,
+  match: string,
   label?: string,
   detail?: string,
 ): ScatterRingEvent {
-  return { kind: 'scatter-ring', chartId, year, label, detail }
+  return { kind: 'scatter-ring', chartId, match, label, detail }
 }
 
 // --- Pure mappers used by the render layer ---------------------------------

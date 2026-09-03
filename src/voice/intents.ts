@@ -4,24 +4,27 @@
  * ⚠️ HONESTY NOTE FOR THE SUBMISSION: this is NOT natural-language understanding
  * and it is NOT Auricle's primary interaction path. The product's primary path
  * is the browser agent (for example Codex using ChatGPT Site Tools) that reads
- * the registered tools and calls them. This matcher is a tiny, readable table of a
- * FEW REHEARSED regex patterns → WebMCP tool-call plans, so the full
+ * the registered tools and calls them. This matcher is a tiny, readable table of
+ * a FEW REHEARSED regex patterns → WebMCP tool-call plans, so the full
  * voice → tool → mirror → log loop can be rehearsed in WebMCP-enabled Chrome.
  *
  * It drives the SAME registered tools an agent would, via `document.modelContext`
  * (`getTools()` + `executeTool(tool, JSON.stringify(args))`), so the page mirror,
  * the activity log, and the highlight ring all fire IDENTICALLY to an agent call.
- * The control that calls this runner is hidden unless the imperative testing
- * API is present; execution failures are also reported by `RunResult`.
  *
- * Because only the focused chart's tool family is registered, intents that target
- * a specific chart's tool are planned as `focus_chart(<id>)` THEN the query/sonify
- * tool. `planIntent` is a pure function (transcript + focus context → ordered
- * plan) and is unit-tested browserless in `src/voice.check.mts`.
+ * The workspace arc shapes every plan: a chart's tool family exists only after
+ * its view is COMMISSIONED (`create_view`), and only the focused view's family
+ * is registered. So chart-targeted intents are planned as
+ * `create_view(<dataset>)` when the view doesn't exist yet (create_view also
+ * focuses it), `focus_chart(<id>)` when it exists but isn't focused, THEN the
+ * query/sonify tool. `planIntent` is a pure function (transcript + workspace/
+ * focus context → ordered plan) and is unit-tested browserless in
+ * `src/voice.check.mts`.
  */
 
 import { CHART_IDS } from '../dashboard/charts.ts'
 import { getFocus, DEFAULT_FOCUS } from '../dashboard/focus.ts'
+import { getWorkspaceIds } from '../dashboard/workspace.ts'
 import { registry } from '../lib/agent-a11y/registry.ts'
 
 /** One planned tool call: the exact name + args an agent would send. */
@@ -34,31 +37,38 @@ export interface ToolCall {
 export interface IntentPlan {
   /** A short label for the matched intent, or `'none'`. */
   readonly intent: string
-  /** Ordered tool calls to run (focus-then-act where a chart is targeted). */
+  /** Ordered tool calls to run (commission/focus-then-act where needed). */
   readonly plan: readonly ToolCall[]
 }
 
-/** Focus context the pure planner needs (kept out of the planner for testability). */
+/** Workspace + focus context the pure planner needs (kept out for testability). */
 export interface IntentContext {
   /** The currently focused chart id, or null. */
   readonly focusedId: string | null
+  /** Ids of the views already commissioned into the workspace. */
+  readonly commissioned: readonly string[]
 }
 
 // --- Chart-id helpers (names computed from CHART_IDS, not hardcoded) ---------
 
 const IDS = new Set<string>(CHART_IDS)
-const MAIZE = 'maize-prices'
-const MORTALITY = 'under5-mortality'
-const YIELD = 'yield-fertilizer'
-const EXCHANGE = 'exchange-rate'
+const TEMP = 'temp-anomaly'
+const EMITTERS = 'co2-emitters'
+const WEALTH = 'wealth-carbon'
+const LIVE = 'co2-live'
 
-/** Map a spoken word to a chart id (used by the "focus …" intent). */
+/** Map a spoken word to a chart id (used by the "focus/show …" intent). */
 function chartIdFromWords(text: string): string | null {
-  if (/\b(maize|meal|price)\b/i.test(text)) return MAIZE
-  if (/\b(mortality|child|children|under[\s-]?5|deaths?)\b/i.test(text)) return MORTALITY
-  if (/\b(yield|fertili[sz]er|crop|harvest)\b/i.test(text)) return YIELD
-  if (/\b(exchange|kwacha|dollar|usd|rate|currency|forex|fx)\b/i.test(text)) return EXCHANGE
+  if (/\b(warming|temperature|anomal|hottest|warmest)\b/i.test(text)) return TEMP
+  if (/\b(emission|emitter|emit|carbon budget)\b/i.test(text)) return EMITTERS
+  if (/\b(wealth|gdp|income|rich|scatter|per.?capita)\b/i.test(text)) return WEALTH
+  if (/\b(mauna\s?loa|ppm|live|feed)\b/i.test(text)) return LIVE
   return null
+}
+
+/** `create_view` call for a dataset id. */
+function createCall(dataset: string): ToolCall {
+  return { tool: 'create_view', args: { dataset } }
 }
 
 /** `focus_chart` call for a chart id. */
@@ -67,18 +77,21 @@ function focusCall(chartId: string): ToolCall {
 }
 
 /**
- * Plan the tool calls for a chart-targeted intent: prepend `focus_chart` unless
- * that chart is already focused, then the family tool.
+ * Plan the calls for a chart-targeted intent under the workspace arc:
+ *  - view not commissioned → `create_view` first (it commissions AND focuses),
+ *  - commissioned but unfocused → `focus_chart` first,
+ *  - already focused → just the family tool.
  */
-function focusThen(chartId: string, familyTool: ToolCall, ctx: IntentContext): ToolCall[] {
+function viewThen(chartId: string, familyTool: ToolCall, ctx: IntentContext): ToolCall[] {
   const calls: ToolCall[] = []
-  if (ctx.focusedId !== chartId) calls.push(focusCall(chartId))
+  if (!ctx.commissioned.includes(chartId)) calls.push(createCall(chartId))
+  else if (ctx.focusedId !== chartId) calls.push(focusCall(chartId))
   calls.push(familyTool)
   return calls
 }
 
 // --- The rehearsed intent table ---------------------------------------------
-// First match wins. Each `resolve` returns an ordered plan given focus context.
+// First match wins. Each `resolve` returns an ordered plan given context.
 
 interface IntentRule {
   readonly intent: string
@@ -87,68 +100,91 @@ interface IntentRule {
 }
 
 const RULES: readonly IntentRule[] = [
-  // "what's on the screen" / "describe the screen" / "where am i"
+  // "what's on the screen" / "describe the screen" / "where am i" — unchanged.
   {
     intent: 'describe-screen',
     test: /(what'?s|what is)\s+on\s+(the\s+)?screen|describe\s+(the\s+)?screen|where\s+am\s+i|orient/i,
     resolve: () => [{ tool: 'describe_screen', args: {} }],
   },
-  // "compare countries" — mortality's cross-country comparison.
+  // "start over" / "clear" — tear the workspace back down to the shelf.
   {
-    intent: 'compare-countries',
-    test: /compare\b/i,
-    resolve: (_t, ctx) =>
-      focusThen(MORTALITY, { tool: `${MORTALITY}_compare_countries`, args: {} }, ctx),
+    intent: 'clear-workspace',
+    test: /start\s+over|start\s+again|clear\b|reset|tear\s+(it\s+)?down|empty\s+the\s+workspace/i,
+    resolve: () => [{ tool: 'clear_workspace', args: {} }],
   },
-  // "How much did maize rise from 2022 [to 2025]?" — the video range beat.
+  // "what's CO2 right now" / "current co2" — the live view + its current value.
   {
-    intent: 'maize-range',
-    test: /(?:how much|change|rise|rose|increase).*(?:from|between)\s+20\d{2}/i,
+    intent: 'current-co2',
+    test: /current\s+co.?[2₂]|co.?[2₂]\s+(right\s+)?now|what'?s\s+co.?[2₂]|co.?[2₂]\s+level|how much co.?[2₂] is in the air/i,
+    resolve: (_t, ctx) => viewThen(LIVE, { tool: `${LIVE}_current_value`, args: {} }, ctx),
+  },
+  // "who emits the most" — the emitters view + its ranking tool.
+  {
+    intent: 'compare-emitters',
+    test: /who\s+emits|emits?\s+the\s+most|biggest\s+emitters?|top\s+emitters?|compare\s+(the\s+)?(countries|emitters)/i,
+    resolve: (_t, ctx) =>
+      viewThen(EMITTERS, { tool: `${EMITTERS}_compare_emitters`, args: {} }, ctx),
+  },
+  // "How much did it warm from 1950 [to 2024]?" — the range beat.
+  {
+    intent: 'warming-range',
+    test: /(?:how much|change|rise|rose|warm(?:ed)?|increase).*(?:from|between|since)\s+(?:18|19|20)\d{2}/i,
     resolve: (text, ctx) => {
-      const years = Array.from(text.matchAll(/\b(20\d{2})\b/g), (match) => match[1])
+      const years = Array.from(text.matchAll(/\b((?:18|19|20)\d{2})\b/g), (match) => Number(match[1]))
       if (!years[0]) return []
-      return focusThen(
-        MAIZE,
+      const lastYear = 2025
+      return viewThen(
+        TEMP,
         {
-          tool: `${MAIZE}_query_range`,
-          args: { start: `${years[0]}-01`, end: `${years[1] ?? '2025'}-01` },
+          tool: `${TEMP}_query_range`,
+          args: { start: years[0], end: years[1] ?? lastYear },
         },
         ctx,
       )
     },
   },
-  // "when did maize spike" / "what's the peak" / "highest" — maize extremes.
+  // "when was the hottest year" / "peak" / "spike" — temperature extremes.
   {
-    intent: 'maize-extremes',
-    test: /\bspik|\bpeak|\bhighest|\bmost expensive|when did .*(rise|jump)/i,
+    intent: 'hottest-year',
+    test: /\bhottest|\bwarmest|\bspik|\bpeak|\brecord\s+(year|warm|heat)|\bhighest/i,
     resolve: (_t, ctx) =>
-      focusThen(MAIZE, { tool: `${MAIZE}_find_extremes`, args: {} }, ctx),
+      viewThen(TEMP, { tool: `${TEMP}_find_extremes`, args: {} }, ctx),
   },
-  // "play it as sound" / "sonify" / "let me hear it" — sonify the focused chart.
+  // "show me warming over time" / "build the warming chart" — commission only.
+  {
+    intent: 'create-warming',
+    test: /(show|build|make|create|draw|chart)\b.*\b(warming|temperature)|warming\s+(over\s+time|chart|curve)/i,
+    resolve: (_t, ctx) =>
+      ctx.commissioned.includes(TEMP) ? [focusCall(TEMP)] : [createCall(TEMP)],
+  },
+  // "play it/the century as sound" / "sonify" — sonify the focused view; with
+  // nothing focused, the century IS the warming curve: commission it, then play.
   {
     intent: 'sonify',
-    test: /play\s+(it|that|this)?\s*(as\s+)?sound|sonif|let me hear|hear (it|that|this)|as sound/i,
+    test: /play\s+(it|that|this|the\s+century)?\s*(as\s+)?sound|sonif|let me hear|hear (it|that|this)|as sound/i,
     resolve: (_t, ctx) => {
-      const chartId = ctx.focusedId && IDS.has(ctx.focusedId) ? ctx.focusedId : DEFAULT_FOCUS
-      return [{ tool: `${chartId}_sonify`, args: {} }]
+      const focused = ctx.focusedId && IDS.has(ctx.focusedId) ? ctx.focusedId : null
+      if (focused) return [{ tool: `${focused}_sonify`, args: {} }]
+      return viewThen(DEFAULT_FOCUS, { tool: `${DEFAULT_FOCUS}_sonify`, args: {} }, ctx)
     },
   },
-  // "focus the maize / mortality / yield / exchange …" — explicit focus verb.
+  // "focus / show me / switch to the <chart words>" — explicit navigation.
   {
     intent: 'focus-chart',
-    test: /\bfocus\b|\bshow me\b|\bswitch to\b|\bgo to\b/i,
-    resolve: (t) => {
+    test: /\bfocus\b|\bshow me\b|\bswitch to\b|\bgo to\b|\bbring up\b/i,
+    resolve: (t, ctx) => {
       const chartId = chartIdFromWords(t)
-      return chartId ? [focusCall(chartId)] : []
+      if (!chartId) return []
+      return ctx.commissioned.includes(chartId) ? [focusCall(chartId)] : [createCall(chartId)]
     },
   },
 ]
 
 /**
  * Resolve a transcript to an ordered WebMCP tool-call plan. PURE — no browser,
- * no side effects. `ctx.focusedId` decides whether a `focus_chart` prefix is
- * needed. Unmatched transcripts return `{ intent: 'none', plan: [] }` (the agent
- * would handle those; here we just show the transcript as the question).
+ * no side effects. `ctx` decides whether a `create_view` / `focus_chart` prefix
+ * is needed. Unmatched transcripts return `{ intent: 'none', plan: [] }` (the
+ * agent would handle those; here we just show the transcript as the question).
  */
 export function planIntent(transcript: string, ctx: IntentContext): IntentPlan {
   const text = transcript.trim()
@@ -161,6 +197,11 @@ export function planIntent(transcript: string, ctx: IntentContext): IntentPlan {
     // with no chart word): fall through to try the next rule / none.
   }
   return { intent: 'none', plan: [] }
+}
+
+/** The live context an execution reads: current focus + commissioned views. */
+function currentContext(): IntentContext {
+  return { focusedId: getFocus(), commissioned: getWorkspaceIds() }
 }
 
 // --- Execution against document.modelContext (the agent-identical path) -----
@@ -192,12 +233,12 @@ export interface RunResult extends IntentPlan {
  * Resolve AND (when WebMCP is present) EXECUTE the plan for `transcript`, exactly
  * as an external agent would: look each tool up in `getTools()` and call
  * `executeTool(tool, JSON.stringify(args))`, awaiting sequentially so a
- * `focus_chart` step registers the chart's family before the next step looks it
- * up. Returns the plan regardless; `executed` is false when `document.modelContext`
- * is absent (voice still displays the transcript in that case).
+ * `create_view` / `focus_chart` step registers the chart's family before the
+ * next step looks it up. Returns the plan regardless; `executed` is false when
+ * `document.modelContext` is absent (voice still displays the transcript).
  */
 export async function runIntent(transcript: string): Promise<RunResult> {
-  const plan = planIntent(transcript, { focusedId: getFocus() })
+  const plan = planIntent(transcript, currentContext())
   const mc = getModelContext()
   if (plan.plan.length === 0) return { ...plan, executed: false, failure: 'unmatched' }
   if (!mc) return { ...plan, executed: false, failure: 'webmcp-unavailable' }
@@ -205,8 +246,8 @@ export async function runIntent(transcript: string): Promise<RunResult> {
     return { ...plan, executed: false, failure: 'execute-unsupported' }
   }
   for (const call of plan.plan) {
-    // Re-read the tool list each step: after focus_chart runs, the newly focused
-    // chart's family is registered and its tool becomes findable here.
+    // Re-read the tool list each step: after create_view/focus_chart runs, the
+    // newly focused chart's family is registered and its tool becomes findable.
     const tools = await mc.getTools()
     const tool = tools.find((t) => t.name === call.tool)
     if (!tool) return { ...plan, executed: false, failure: 'tool-not-found' }
@@ -230,10 +271,12 @@ export async function runIntent(transcript: string): Promise<RunResult> {
  * Deterministic in-page rehearsal. It resolves the same intent plan and runs
  * the exact registered ToolDef handlers through the registry's shared
  * mirror/log execution path, without relying on a host's page-callable
- * `executeTool()` implementation.
+ * `executeTool()` implementation. Because `create_view`'s handler commissions
+ * the view (registering + focusing its family), later steps of the same plan
+ * find their tools exactly as an agent's sequential calls would.
  */
 export async function runLocalIntent(transcript: string): Promise<RunResult> {
-  const plan = planIntent(transcript, { focusedId: getFocus() })
+  const plan = planIntent(transcript, currentContext())
   if (plan.plan.length === 0) return { ...plan, executed: false, failure: 'unmatched' }
   for (const call of plan.plan) {
     const executed = await registry.executeLocal(call.tool, call.args)
@@ -245,7 +288,7 @@ export async function runLocalIntent(transcript: string): Promise<RunResult> {
 // --- Dev/test hook ----------------------------------------------------------
 // Exposes `runIntent` on `window.__auricleRunIntent` so the integrating agent
 // can drive the loop from the browser console WITHOUT real speech, e.g.
-//   await window.__auricleRunIntent('when did maize spike')
+//   await window.__auricleRunIntent('when was the hottest year')
 // Guarded to the browser; harmless in Node/tests. Genuinely useful for the
 // demo and for QA in a WebMCP-flagged Chrome, so it is intentionally left in.
 declare global {

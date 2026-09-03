@@ -60,7 +60,8 @@ function SiteToolsGuide() {
           : 'Ask Codex after opening Auricle in the latest ChatGPT desktop app with GPT-5.6 Sol or Terra, or use WebMCP-enabled Chrome.'}
       </p>
       <p className="rail-agent__prompt">
-        <strong>Try:</strong> “When did maize prices peak?”
+        <strong>Try:</strong> “Show me warming over time.” · “Who emits the most?” ·
+        “When was the hottest year?” · “Play the century as sound.”
       </p>
     </div>
   )
@@ -68,10 +69,10 @@ function SiteToolsGuide() {
 
 function failureMessage(failure: RunResult['failure']): string {
   if (failure === 'unmatched') {
-    return 'Try “When did maize prices peak?”, “How much did it rise from 2022?”, “Compare countries”, or “Play it as sound”.'
+    return 'Try “Show me warming over time”, “When was the hottest year?”, “Who emits the most?”, “What’s CO2 right now?”, or “Start over”.'
   }
   if (failure === 'tool-not-found') {
-    return 'That chart tool is not registered yet. Focus its chart and try again.'
+    return 'That view’s tools are not registered yet. Commission it first (“Show me warming over time”) and try again.'
   }
   return 'Direct Ask needs WebMCP execution support. Use the latest ChatGPT desktop browser or WebMCP-enabled Chrome.'
 }
@@ -112,7 +113,7 @@ function DirectAsk({ onStatus }: { onStatus(message: string | null): void }) {
           type="text"
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          placeholder="When did maize prices peak?"
+          placeholder="When was the hottest year?"
           autoComplete="off"
           disabled={running}
         />
@@ -213,7 +214,8 @@ export function Rail() {
           <p className="rail-a__text">{localStatus}</p>
         ) : (
           <p className="rail-a__text rail-a__text--empty">
-            Waiting for your browser agent to call an Auricle tool.
+            Ask the planet something. No views yet — every chart that appears here
+            will exist because you asked for it.
           </p>
         )}
         {sonifyMs > 0 && <SonifyBar seconds={Math.round(sonifyMs / 100) / 10} />}

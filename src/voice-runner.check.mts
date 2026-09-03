@@ -17,6 +17,8 @@ function installModelContext(value?: FakeModelContext): void {
   })
 }
 
+// On the shelf (empty workspace), "what's the peak" plans
+// create_view(temp-anomaly) → temp-anomaly_find_extremes.
 installModelContext()
 const unavailable = await runIntent("what's the peak")
 assert.equal(unavailable.executed, false)
@@ -37,7 +39,7 @@ assert.equal(missing.failure, 'tool-not-found')
 
 const calls: Array<{ tool: string; args: string }> = []
 installModelContext({
-  getTools: async () => [{ name: 'maize-prices_find_extremes' }],
+  getTools: async () => [{ name: 'create_view' }, { name: 'temp-anomaly_find_extremes' }],
   executeTool: async (tool, args) => {
     if (typeof args !== 'string') throw new TypeError('legacy host requires JSON string')
     calls.push({ tool: tool.name, args })
@@ -46,7 +48,10 @@ installModelContext({
 const success = await runIntent("what's the peak")
 assert.equal(success.executed, true)
 assert.equal(success.failure, undefined)
-assert.deepEqual(calls, [{ tool: 'maize-prices_find_extremes', args: '{}' }])
+assert.deepEqual(calls, [
+  { tool: 'create_view', args: '{"dataset":"temp-anomaly"}' },
+  { tool: 'temp-anomaly_find_extremes', args: '{}' },
+])
 
 Reflect.deleteProperty(globalThis, 'document')
 registry.registerGlobal({

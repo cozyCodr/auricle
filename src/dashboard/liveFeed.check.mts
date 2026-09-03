@@ -1,7 +1,8 @@
 /**
- * liveFeed.check.mts — browserless unit check of the ticking session store (4.3).
+ * liveFeed.check.mts — browserless unit check of the ticking session store.
  * Drives `tick()` directly (no timers, no browser) and asserts the walk stays
- * bounded, the buffer/stats accumulate, and the seed is the real close.
+ * bounded, the buffer/stats accumulate, and the seed is the real latest NOAA
+ * weekly mean.
  * Run: `npx tsx src/dashboard/liveFeed.check.mts`
  */
 import {
@@ -14,7 +15,7 @@ import {
   BAND_PCT,
   STEP_PCT,
 } from './liveFeed.ts'
-import { exchange } from './charts.ts'
+import { co2Live } from './charts.ts'
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) {
@@ -28,14 +29,14 @@ const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d
 __resetLiveFeedForTests()
 
 const seed = getSeed()
-const realLast = exchange.points[exchange.points.length - 1].y
-assert(seed === realLast, `seed is the real last close (${seed} === ${realLast})`)
+const realLast = co2Live.points[co2Live.points.length - 1].y
+assert(seed === realLast, `seed is the real latest weekly mean (${seed} === ${realLast})`)
 
 // Tick #0 state.
 let s = getSessionStats()
 assert(s.tickCount === 0, 'starts at 0 ticks')
 assert(s.min === seed && s.max === seed && s.range === 0, 'stats seeded to the seed')
-assert(getLiveValues().length === exchange.points.length, 'live values == baseline before any tick')
+assert(getLiveValues().length === co2Live.points.length, 'live values == baseline before any tick')
 
 // Drive 200 ticks; assert bounds + accumulation.
 const lo = seed * (1 - BAND_PCT)
@@ -55,11 +56,11 @@ assert(s.tickCount === 200, `tickCount == 200 (got ${s.tickCount})`)
 assert(s.count === 201, 'buffer == seed + 200 ticks')
 assert(s.min <= seed && s.max >= s.min, 'min/max track the walk')
 assert(round(s.range) === round(s.max - s.min), 'range == max − min')
-assert(getLiveValues().length === exchange.points.length + 200, 'live values == baseline + ticks')
+assert(getLiveValues().length === co2Live.points.length + 200, 'live values == baseline + ticks')
 
 console.log(
-  `ok — liveFeed store: seed=${round(seed)} (real close), 200 bounded ticks ` +
+  `ok — liveFeed store: seed=${round(seed)} ppm (real NOAA weekly mean), 200 bounded ticks ` +
     `(±${STEP_PCT * 100}%/tick, clamped ±${BAND_PCT * 100}%), tickCount/min/max/range/buffer all track. ` +
-    `range after 200 ticks: ${round(s.min)}–${round(s.max)}.`,
+    `range after 200 ticks: ${round(s.min)}–${round(s.max)} ppm.`,
 )
 __resetLiveFeedForTests()

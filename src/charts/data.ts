@@ -1,157 +1,121 @@
 /**
- * data.ts — chart-layer adapters over the baked datasets from `../dashboard/charts`.
+ * data.ts — chart-layer adapters over the baked climate datasets from
+ * `../dashboard/charts`.
  *
- * The dashboard layer owns the typed JSON (`maize`, `mortality`, …); this module
- * reshapes each dataset into the numeric `{x,y,label}` form the SVG components
- * draw, plus an accessible `TableModel` per chart for the "View as table" toggle.
+ * The dashboard layer owns the typed JSON (`tempAnomaly`, `emitters`, …); this
+ * module reshapes each dataset into the numeric `{x,y,label}` form the SVG
+ * components draw, plus an accessible `TableModel` per dataset for both the
+ * raw-data shelf (the app's initial state) and the "View as table" toggle.
  *
- * 3.2 can import the numeric series and the `monthIndexOf` helper to express
- * `highlight` overlays in the same x-domain the LineChart draws in.
+ * The tool families import the numeric series so `highlight` overlays are
+ * expressed in the same x-domain the charts draw in (calendar years for the
+ * lines; GDP per capita for the scatter; sparkline index for the live feed).
  */
 
-import { maize, mortality, yieldFert, exchange } from '../dashboard/charts.ts'
-import type { LinePoint, ScatterPoint, BarDatum, TableModel, LineHighlight } from './types.ts'
+import { tempAnomaly, emitters, wealthCarbon, co2Live, fmtAnomaly, fmtInt } from '../dashboard/charts.ts'
+import type { LinePoint, ScatterPoint, BarDatum, TableModel } from './types.ts'
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-] as const
+// --- Line: global temperature anomaly (yearly, the hero) --------------------
 
-/** "2015-01" → a monotonic month index (year*12 + monthIndex); the LineChart x-domain for maize. */
-export function monthIndexOf(ym: string): number {
-  const [y, m] = ym.split('-').map(Number)
-  return y * 12 + (m - 1)
-}
-
-/** "2015-01" → "Jan 2015". */
-function monthLabel(ym: string): string {
-  const [y, m] = ym.split('-')
-  return `${MONTHS[Number(m) - 1] ?? m} ${y}`
-}
-
-/** Short display names for the mortality comparator bars. */
-const COUNTRY_SHORT: Record<string, string> = {
-  ZMB: 'Zambia',
-  NGA: 'Nigeria',
-  COD: 'DR Congo',
-  ZWE: 'Zimbabwe',
-  KEN: 'Kenya',
-  TZA: 'Tanzania',
-  ZAF: 'S. Africa',
-}
-
-// --- Line: maize retail price (monthly, with a real 15-month gap) -----------
-
-export const maizeLine: LinePoint[] = maize.points.map((p) => ({
-  x: monthIndexOf(p.x),
-  y: p.y,
-  label: monthLabel(p.x),
-}))
-
-/** The all-time peak of the maize series, computed from the real data. */
-export const maizePeak: LinePoint = maizeLine.reduce((best, cur) => (cur.y > best.y ? cur : best))
-
-/**
- * A demo highlight proving the LineChart renders the gold band + dark tooltip.
- * Derived from real data (the decade peak) — 3.2 will replace this with a
- * mirror-driven overlay.
- */
-export const maizeDemoHighlight: LineHighlight = {
-  kind: 'point',
-  x: maizePeak.x,
-  label: `${maizePeak.label} · K${maizePeak.y.toFixed(2)}`,
-  detail: 'decade peak — retail maize meal',
-}
-
-// --- Line: Zambia under-5 mortality (yearly) -------------------------------
-
-export const mortalityLine: LinePoint[] = mortality.zambia_series.map((p) => ({
+export const tempLine: LinePoint[] = tempAnomaly.points.map((p) => ({
   x: p.x,
   y: p.y,
   label: String(p.x),
 }))
 
-// --- Bars: under-5 mortality, latest comparators ---------------------------
+/** The record-warm year, computed from the real data. */
+export const tempPeak: LinePoint = tempLine.reduce((best, cur) => (cur.y > best.y ? cur : best))
 
-export const mortalityBars: BarDatum[] = [...mortality.comparators_latest]
-  .sort((a, b) => b.value - a.value)
-  .map((c) => ({
-    label: COUNTRY_SHORT[c.code] ?? c.country,
-    value: c.value,
-    emphasis: c.code === 'ZMB',
-  }))
+// --- Line + bars: global CO₂ series and latest-year top emitters ------------
 
-// --- Scatter: cereal yield vs fertilizer (yearly) --------------------------
-
-export const yieldScatter: ScatterPoint[] = yieldFert.points.map((p) => ({
+export const emittersGlobalLine: LinePoint[] = emitters.global_series.map((p) => ({
   x: p.x,
   y: p.y,
-  label: String(p.year),
+  label: String(p.x),
 }))
 
-// --- Live: ZMW/USD daily closes --------------------------------------------
+export const emitterBars: BarDatum[] = emitters.emitters_latest.map((e, i) => ({
+  label: e.country,
+  value: e.value,
+  emphasis: i === 0, // the top emitter carries the outline emphasis
+}))
 
-/** Sparkline series (sequential index x); `label` is the ISO date. */
-export const fxLine: LinePoint[] = exchange.points.map((p, i) => ({
+// --- Scatter: GDP per capita vs CO₂ per capita ------------------------------
+
+/** Dots keyed by country name (the label the mirror ring matches against). */
+export const wealthScatter: ScatterPoint[] = wealthCarbon.points.map((p) => ({
+  x: p.x,
+  y: p.y,
+  label: p.country,
+}))
+
+// --- Live: NOAA Mauna Loa weekly CO₂ ----------------------------------------
+
+/** Sparkline series (sequential index x); `label` is the ISO week-start date. */
+export const ppmLine: LinePoint[] = co2Live.points.map((p, i) => ({
   x: i,
   y: p.y,
   label: p.x,
 }))
 
-/** Latest close — the big mono figure LiveFeed shows (4.3 will drive `current` live). */
-export const fxCurrent: number = exchange.points[exchange.points.length - 1].y
+/** Latest real weekly mean — the live feed's seed. */
+export const ppmCurrent: number = co2Live.points[co2Live.points.length - 1].y
 
-// --- Accessible table models (one per chart; captions cite the source) -----
+// --- Accessible table models (one per dataset; captions cite the source) ----
 
 const TABLES: Record<string, TableModel> = {
-  'maize-prices': {
-    caption: `Maize meal retail price, ZMW per kg, monthly. Source: ${maize.source}.`,
+  'temp-anomaly': {
+    caption: `Global mean temperature anomaly, °C vs 1951–1980, yearly. Source: ${tempAnomaly.source}.`,
     columns: [
-      { key: 'month', label: 'Month' },
-      { key: 'price', label: 'ZMW/kg', numeric: true },
-      { key: 'markets', label: 'Markets', numeric: true },
+      { key: 'year', label: 'Year', numeric: true },
+      { key: 'anomaly', label: '°C anomaly', numeric: true },
     ],
-    rows: maize.points.map((p) => ({
-      month: monthLabel(p.x),
-      price: p.y.toFixed(2),
-      markets: p.n,
+    rows: tempAnomaly.points.map((p) => ({
+      year: p.x,
+      anomaly: fmtAnomaly(p.y),
     })),
   },
-  'under5-mortality': {
-    caption: `Under-5 mortality, deaths per 1,000 live births, latest year by country. Source: ${mortality.source}.`,
+  'co2-emitters': {
+    caption: `Global fossil CO₂ emissions, million tonnes per year, plus latest-year top emitters. Source: ${emitters.source}.`,
+    columns: [
+      { key: 'year', label: 'Year', numeric: true },
+      { key: 'mt', label: 'World Mt CO₂', numeric: true },
+    ],
+    rows: emitters.global_series.map((p) => ({
+      year: p.x,
+      mt: fmtInt(p.y),
+    })),
+  },
+  'wealth-carbon': {
+    caption: `GDP per capita (international-$) vs CO₂ per capita (t/year), ${wealthCarbon.year}. Source: ${wealthCarbon.source}.`,
     columns: [
       { key: 'country', label: 'Country' },
-      { key: 'value', label: 'Per 1,000', numeric: true },
-      { key: 'year', label: 'Year', numeric: true },
+      { key: 'gdp', label: 'GDP/capita $', numeric: true },
+      { key: 'co2', label: 't CO₂/capita', numeric: true },
     ],
-    rows: [...mortality.comparators_latest]
-      .sort((a, b) => b.value - a.value)
-      .map((c) => ({ country: c.country, value: c.value.toFixed(1), year: c.year })),
+    rows: [...wealthCarbon.points]
+      .sort((a, b) => b.x - a.x)
+      .map((p) => ({ country: p.country, gdp: fmtInt(p.x), co2: p.y.toFixed(2) })),
   },
-  'yield-fertilizer': {
-    caption: `Cereal yield vs fertilizer consumption, yearly, Zambia. Source: ${yieldFert.source}.`,
+  'co2-live': {
+    caption: `CO₂ at Mauna Loa, weekly mean ppm (simulated live feed). Source: ${co2Live.source}.`,
     columns: [
-      { key: 'year', label: 'Year', numeric: true },
-      { key: 'fert', label: 'Fertilizer kg/ha', numeric: true },
-      { key: 'yield', label: 'Yield kg/ha', numeric: true },
+      { key: 'week', label: 'Week of' },
+      { key: 'ppm', label: 'ppm', numeric: true },
     ],
-    rows: yieldFert.points.map((p) => ({
-      year: p.year,
-      fert: p.x.toFixed(1),
-      yield: p.y.toFixed(0),
-    })),
-  },
-  'exchange-rate': {
-    caption: `ZMW per USD, daily closes (simulated live feed). Source: ${exchange.source}.`,
-    columns: [
-      { key: 'date', label: 'Date' },
-      { key: 'rate', label: 'ZMW/USD', numeric: true },
-    ],
-    rows: exchange.points.map((p) => ({ date: p.x, rate: p.y.toFixed(4) })),
+    rows: [...co2Live.points].reverse().map((p) => ({ week: p.x, ppm: p.y.toFixed(2) })),
   },
 }
 
-/** The accessible table model for a chart id (for the "View as table" toggle). */
+/** The accessible table model for a chart id (shelf + "View as table"). */
 export function tableFor(chartId: string): TableModel | undefined {
   return TABLES[chartId]
 }
+
+/** Real row count of a dataset's table (for the shelf's honest headlines). */
+export function rowCountFor(chartId: string): number {
+  return TABLES[chartId]?.rows.length ?? 0
+}
+
+/** Total rows across every dataset — the shelf's "N rows. Zero answers." */
+export const TOTAL_ROWS: number = Object.values(TABLES).reduce((n, t) => n + t.rows.length, 0)

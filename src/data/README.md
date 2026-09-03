@@ -12,53 +12,54 @@ the run time; historical values are stable).
 
 ---
 
-## 1. `maize-prices.json` — HERO time series
+## 1. `temp-anomaly.json` — HERO time series
 
-- **Source:** WFP (World Food Programme) Zambia retail food prices, via HDX (keyless CSV).
-- **What it shows:** national average **retail price of white *roller* mealie-meal**
-  (Zambia's staple food) in **ZMW per kg**, monthly, Jan 2015 → Sep 2025 (115 months).
-- **Shape:** `points: [{ x: "YYYY-MM", y: ZMW_per_kg, n: markets_averaged }]`.
-- **The story (real):** ~**2.2 ZMW/kg in 2015 → peak 12.11 ZMW/kg in Jan 2025 (~5.6x)**,
-  then easing to ~8.9 by Sep 2025 after the 2025 harvest. Big acceleration
-  2022 (5.3 avg) → 2023 (9.5 avg), driven by the kwacha's 2022 slide and the
-  2023–24 El Niño drought that gutted the maize crop.
-- **Honesty notes:**
-  - WFP switched the reported unit from `KG` (≤2022) to `25 KG` bags (2023+).
-    The pipeline **normalises every observation to per-kg** (25-kg-bag prices ÷ 25),
-    so the line is continuous and the jump is *real*, not a units artifact.
-  - There is a genuine **~14-month coverage gap (late 2022 → late 2023)** across the
-    WFP methodology change; it is **left un-interpolated** (chart should render a gap,
-    not a straight interpolated segment).
-  - `n` (markets averaged per month) ranges from a handful early to 120+ in 2024–25.
+- **Source:** NASA GISS Surface Temperature Analysis (GISTEMP v4), annual
+  global mean land–ocean anomaly (`GLB.Ts+dSST.csv`, the J-D column).
+- **What it shows:** the annual global mean temperature anomaly in **°C versus
+  the 1951–1980 average**, 1880 → 2025 (146 complete years).
+- **Shape:** `points: [{ x: year, y: °C }]`.
+- **The story (real):** the 1880s sit near **−0.2 °C**; the curve crosses zero
+  in the late 1970s and accelerates to a record **+1.28 °C in 2024** (2025:
+  +1.19). Incomplete years (`***` in the CSV) are omitted, never estimated.
 
-## 2. `under5-mortality.json` — Zambia trend + comparator bars
+## 2. `co2-emitters.json` — global line + latest-year bars
 
-- **Source:** World Bank Open Data, `SH.DYN.MORT` (keyless).
-- **Unit:** deaths per 1,000 live births.
-- **Shape:** `zambia_series: [{ x: year, y }]` (2000–2024, 25 pts) and
-  `comparators_latest: [{ country, code, year, value }]` (latest year, sorted desc).
-- **The story (real):** Zambia's under-5 mortality **more than halved from
-  151.8 (2000) / 102.7 (2005) to 48.4 (2024)** — a real, steady public-health gain.
-  Comparators (2024): Nigeria 115.6, DR Congo 89.7, Zimbabwe 64.7, **Zambia 48.4**,
-  Kenya 38.8, Tanzania 37.0, South Africa 35.1 → Zambia sits **mid-pack**.
+- **Source:** Our World in Data — Annual CO₂ emissions (Global Carbon Budget),
+  via the small filtered grapher CSV (not the ~60 MB full dump).
+- **What it shows:** (a) `global_series` — world fossil CO₂ in **million
+  tonnes/year**, 1850 → 2024 (175 years); (b) `emitters_latest` — the six
+  biggest emitting economies' latest-year totals.
+- **The story (real):** the world emitted a record **38,599 Mt in 2024**;
+  **China leads at 12,289 Mt** — more than the US (4,904) and India (3,193)
+  combined. EU-27 2,426, Russia 1,781, Japan 962.
 
-## 3. `yield-fertilizer.json` — scatter (x/y correlation)
+## 3. `wealth-carbon.json` — scatter
 
-- **Source:** World Bank Open Data, `AG.YLD.CREL.KG` (y) & `AG.CON.FERT.ZS` (x), keyless.
-- **Unit:** x = fertilizer consumption (kg/ha arable land); y = cereal yield (kg/ha).
-- **Shape:** `points: [{ year, x, y }]` (63 pts, 1961–2023).
-- **The story (real):** fertilizer use climbed **~11 kg/ha (2000) → 77 kg/ha (2023)**
-  while cereal yields drifted up but stayed **rain-dependent and noisy**
-  (~1,700 → ~2,300 kg/ha, with wet-year spikes like 2015 at ~3,000).
-  A **real but weak positive relationship** — not a clean line. Good for making the
-  "correlation ≠ causation / the data is messy" point honestly.
+- **Source:** Our World in Data — CO₂ per capita vs GDP per capita
+  (Global Carbon Budget; Maddison Project).
+- **What it shows:** `points: [{ country, code, x: GDP/capita (intl-$),
+  y: t CO₂/capita }]` for **26 countries across income levels in 2022** (the
+  latest year both series exist). Country *selection* is editorial; every
+  value is fetched.
+- **The story (real):** wealth and carbon correlate at **r≈0.65** — from
+  Ethiopia ($2,289, 0.14 t) to the US (14.8 t); yet Norway, the richest at
+  $88,366, emits 7.5 t, so income is not destiny.
 
-## 4. `exchange-rate.json` — ZMW/USD, simulated live feed
+## 4. `co2-live.json` — live feed baseline
 
-- **Source:** fawazahmed0 currency-api (keyless daily reference rates).
-- **Unit:** ZMW per USD. `live_simulated: true`.
-- **Shape:** `points: [{ x: "YYYY-MM-DD", y: ZMW_per_USD }]` — last ~30 real daily closes.
-- **The story (real):** the kwacha has **strengthened** recently (≈27 mid-2025 →
-  ≈19 by Aug 2026), reversing part of its 2022–24 slump. These are **real closing
-  values**; the runtime is meant to **replay/perturb** them as a clearly-labelled
-  **"simulated feed"** — the baseline is real, the tick-by-tick motion in the UI is not.
+- **Source:** NOAA Global Monitoring Laboratory — Mauna Loa weekly mean CO₂
+  (comment-prefixed CSV; `-999.99` missing weeks skipped).
+- **What it shows:** the last **76 real weekly means** in **ppm**, ending
+  **426.94 ppm (week of 2026-08-23)** — versus ~280 ppm pre-industrial. The
+  sawtooth is the Northern Hemisphere's seasonal breathing on a relentless
+  upward trend.
+- **Honesty note:** `live_simulated: true` — the runtime replays a tiny bounded
+  random walk (±0.01%/tick, clamped ±0.5%) seeded from the real latest value,
+  and every surface labels it a simulated feed.
+
+---
+
+The previous Zambia datasets (maize prices, under-5 mortality,
+yield-vs-fertilizer, ZMW/USD) were removed in the climate pivot; their fetch
+logic lives in git history.

@@ -1,0 +1,168 @@
+{
+  "source": "Our World in Data — CO₂ emissions per capita vs GDP per capita (Global Carbon Budget; Maddison Project)",
+  "source_url": "https://ourworldindata.org/grapher/co2-emissions-vs-gdp.csv?csvType=full&useColumnShortNames=true",
+  "fetched_at": "2026-09-03T12:08:43.860Z",
+  "unit": "x = GDP per capita (international-$, 2011 prices); y = tonnes CO₂ per person per year",
+  "note": "26 countries across income levels in 2022 (the latest year with both series). Wealth and carbon are strongly linked: per-capita emissions run from under 0.5 t in the poorest economies to 14.8 t (United States) — but countries at similar incomes differ several-fold, so the link is not destiny.",
+  "year": 2022,
+  "x_label": "GDP per capita (international-$)",
+  "y_label": "CO₂ per capita (t/year)",
+  "points": [
+    {
+      "country": "Ethiopia",
+      "code": "ETH",
+      "x": 2289,
+      "y": 0.14
+    },
+    {
+      "country": "Kenya",
+      "code": "KEN",
+      "x": 3404,
+      "y": 0.38
+    },
+    {
+      "country": "Bangladesh",
+      "code": "BGD",
+      "x": 4926,
+      "y": 0.6
+    },
+    {
+      "country": "Nigeria",
+      "code": "NGA",
+      "x": 5070,
+      "y": 0.59
+    },
+    {
+      "country": "Pakistan",
+      "code": "PAK",
+      "x": 5532,
+      "y": 0.87
+    },
+    {
+      "country": "India",
+      "code": "IND",
+      "x": 7766,
+      "y": 1.99
+    },
+    {
+      "country": "Vietnam",
+      "code": "VNM",
+      "x": 8050,
+      "y": 3.24
+    },
+    {
+      "country": "South Africa",
+      "code": "ZAF",
+      "x": 11416,
+      "y": 6.87
+    },
+    {
+      "country": "Indonesia",
+      "code": "IDN",
+      "x": 12802,
+      "y": 2.72
+    },
+    {
+      "country": "Egypt",
+      "code": "EGY",
+      "x": 13205,
+      "y": 2.22
+    },
+    {
+      "country": "Brazil",
+      "code": "BRA",
+      "x": 14640,
+      "y": 2.28
+    },
+    {
+      "country": "Mexico",
+      "code": "MEX",
+      "x": 16235,
+      "y": 3.53
+    },
+    {
+      "country": "China",
+      "code": "CHN",
+      "x": 19238,
+      "y": 8.22
+    },
+    {
+      "country": "Russia",
+      "code": "RUS",
+      "x": 25437,
+      "y": 11.51
+    },
+    {
+      "country": "Turkey",
+      "code": "TUR",
+      "x": 27362,
+      "y": 5.1
+    },
+    {
+      "country": "Poland",
+      "code": "POL",
+      "x": 32468,
+      "y": 8.2
+    },
+    {
+      "country": "Japan",
+      "code": "JPN",
+      "x": 38269,
+      "y": 8.24
+    },
+    {
+      "country": "United Kingdom",
+      "code": "GBR",
+      "x": 38407,
+      "y": 4.56
+    },
+    {
+      "country": "France",
+      "code": "FRA",
+      "x": 39066,
+      "y": 4.46
+    },
+    {
+      "country": "South Korea",
+      "code": "KOR",
+      "x": 41321,
+      "y": 11.72
+    },
+    {
+      "country": "Canada",
+      "code": "CAN",
+      "x": 45530,
+      "y": 14.11
+    },
+    {
+      "country": "Germany",
+      "code": "DEU",
+      "x": 46648,
+      "y": 7.94
+    },
+    {
+      "country": "Australia",
+      "code": "AUS",
+      "x": 52049,
+      "y": 14.66
+    },
+    {
+      "country": "United States",
+      "code": "USA",
+      "x": 58487,
+      "y": 14.8
+    },
+    {
+      "country": "Switzerland",
+      "code": "CHE",
+      "x": 63323,
+      "y": 3.75
+    },
+    {
+      "country": "Norway",
+      "code": "NOR",
+      "x": 88366,
+      "y": 7.48
+    }
+  ]
+}

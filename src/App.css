@@ -1006,3 +1006,105 @@ button.app-header__voice {
     transition: none;
   }
 }
+
+/* ---- Header dataset note (plain text — no pill; hierarchy by typography) ---- */
+.app-header__note {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ---- The raw data shelf (initial state; P0-02 owns the full restyle) ---- */
+.shelf {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 0;
+}
+
+.shelf__lede {
+  display: flex;
+  align-items: baseline;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.shelf__headline {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 700;
+}
+
+.shelf__sub {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+  max-width: 56ch;
+}
+
+.shelf__grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  align-items: start;
+}
+
+.shelf__dataset {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Header is a real button: clicking commissions the canonical view. */
+.shelf__dataset-head {
+  appearance: none;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid var(--ink);
+  padding: 0 0 6px;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ink);
+}
+
+.shelf__dataset-head:hover .shelf__dataset-title {
+  text-decoration: underline;
+}
+
+.shelf__dataset-head:focus-visible {
+  outline: 3px solid var(--data-blue);
+  outline-offset: 2px;
+}
+
+.shelf__dataset-title {
+  font-weight: 700;
+}
+
+.shelf__dataset-meta {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.shelf__dataset .datatable {
+  margin-top: 6px;
+  max-height: 52vh;
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+}
+
+@media (max-width: 1100px) {
+  .shelf__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

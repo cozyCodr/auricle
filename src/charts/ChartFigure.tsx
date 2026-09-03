@@ -3,28 +3,27 @@
  *
  * One place that knows which of the four hand-rolled components draws each chart
  * id, and its per-chart specifics (axis labels, formatters, the visual mirror).
- * under-5 mortality shows its Zambia trend LINE plus a comparator BAR strip in
- * the hero (so `compare_countries` has bars to emphasise); the small card shows
- * the comparator bars alone.
+ * co2-emitters shows the global emissions LINE plus the top-emitter BAR strip in
+ * the hero (so `compare_emitters` has bars to emphasise); the small card shows
+ * the bars alone.
  *
- * 3.2: `highlight` is a `MirrorHighlightEvent` from the mirror bus (via
+ * `highlight` is a `MirrorHighlightEvent` from the mirror bus (via
  * `useChartHighlight`). Each chart maps the event to its own overlay — a line
  * band/point, a bar ring, a scatter ring, or the live answer pill.
  */
 
-import { getChart } from '../dashboard/charts.ts'
+import { getChart, wealthCarbon, fmtAnomaly } from '../dashboard/charts.ts'
 import type { ChartVariant } from './types.ts'
 import { LineChart } from './LineChart.tsx'
 import { BarChart } from './BarChart.tsx'
 import { ScatterChart } from './ScatterChart.tsx'
-import { ExchangeLiveFeed } from './LiveFeed.tsx'
+import { Co2LiveFeed } from './LiveFeed.tsx'
 import {
-  maizeLine,
-  mortalityLine,
-  mortalityBars,
-  yieldScatter,
+  tempLine,
+  emittersGlobalLine,
+  emitterBars,
+  wealthScatter,
 } from './data.ts'
-import { yieldFert } from '../dashboard/charts.ts'
 import { lineHighlightFromMirror, type MirrorHighlightEvent } from './highlight.ts'
 
 /** aria-label combining the chart title with its real headline figure. */
@@ -49,67 +48,67 @@ export function ChartFigure({
   const lineHl = ev ? lineHighlightFromMirror(ev) ?? undefined : undefined
 
   switch (chartId) {
-    case 'maize-prices':
+    case 'temp-anomaly':
       return (
         <LineChart
-          points={maizeLine}
+          points={tempLine}
           variant={variant}
           ariaLabel={aria}
           highlight={lineHl}
-          formatY={(v) => `K${v.toFixed(1)}`}
-          formatXTick={(p) => p.label.split(' ')[1] ?? p.label}
+          formatY={(v) => `${fmtAnomaly(v)}°`}
+          formatXTick={(p) => p.label}
         />
       )
 
-    case 'under5-mortality': {
+    case 'co2-emitters': {
       const barEmph = ev && ev.kind === 'bar-emphasis' ? ev : undefined
-      // Hero → Zambia trend line ABOVE the comparator strip; small card → bars only.
+      // Hero → global emissions line ABOVE the top-emitter strip; small card → bars only.
       if (variant === 'hero') {
         return (
           <div>
             <LineChart
-              points={mortalityLine}
+              points={emittersGlobalLine}
               variant="hero"
               ariaLabel={aria}
               highlight={lineHl}
-              formatY={(v) => v.toFixed(0)}
+              formatY={(v) => `${Math.round(v / 1000)} Gt`}
             />
             <div style={{ marginTop: 6 }}>
               <BarChart
-                data={mortalityBars}
+                data={emitterBars}
                 variant="small"
-                ariaLabel={`Under-5 mortality, latest year by country. ${mortalityBars[0].label} highest.`}
+                ariaLabel={`CO₂ emissions, latest year by economy. ${emitterBars[0].label} highest.`}
                 emphasisLabel={barEmph?.country}
                 emphasisDetail={barEmph?.detail}
-                formatValue={(v) => v.toFixed(1)}
+                formatValue={(v) => `${Math.round(v).toLocaleString('en-US')}`}
               />
             </div>
           </div>
         )
       }
-      return <BarChart data={mortalityBars} variant="small" ariaLabel={aria} />
+      return <BarChart data={emitterBars} variant="small" ariaLabel={aria} />
     }
 
-    case 'yield-fertilizer': {
+    case 'wealth-carbon': {
       const ring = ev && ev.kind === 'scatter-ring' ? ev : undefined
       return (
         <ScatterChart
-          points={yieldScatter}
+          points={wealthScatter}
           variant={variant}
           ariaLabel={aria}
-          xAxisLabel={yieldFert.x_label}
-          yAxisLabel={yieldFert.y_label}
-          ringLabelMatch={ring ? String(ring.year) : undefined}
+          xAxisLabel={wealthCarbon.x_label}
+          yAxisLabel={wealthCarbon.y_label}
+          ringLabelMatch={ring?.match}
           ringLabel={ring?.label}
           ringDetail={ring?.detail}
         />
       )
     }
 
-    case 'exchange-rate': {
+    case 'co2-live': {
       const answer = ev && ev.kind === 'highlight-point' ? ev : undefined
       return (
-        <ExchangeLiveFeed
+        <Co2LiveFeed
           variant={variant}
           ariaLabel={aria}
           answerLabel={answer?.label}

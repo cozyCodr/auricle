@@ -17,10 +17,14 @@
 import { useSyncExternalStore } from 'react'
 import { registry } from '../lib/agent-a11y'
 
-/** The chart focused on first load: the maize hero. */
-export const DEFAULT_FOCUS = 'maize-prices'
+/**
+ * The canonical hero DATASET (the warming curve) — used as the fallback target
+ * for chart-implicit intents. NOTHING is focused on first load: the app boots
+ * as a raw data shelf with zero commissioned views (see workspace.ts).
+ */
+export const DEFAULT_FOCUS = 'temp-anomaly'
 
-let focusedId: string | null = DEFAULT_FOCUS
+let focusedId: string | null = null
 const listeners = new Set<() => void>()
 
 function emit(): void {
@@ -54,8 +58,9 @@ export function getFocus(): string | null {
 }
 
 /**
- * Sync the registry to the store's default once, at app start (after surfaces
- * are registered). Idempotent — the registry no-ops a re-focus of the same id.
+ * Sync the registry to the store's state once, at app start. On the shelf
+ * nothing is focused, so this is a no-op until a view is commissioned.
+ * Idempotent — the registry no-ops a re-focus of the same id.
  */
 export function initFocus(): void {
   if (focusedId) registry.focus(focusedId)

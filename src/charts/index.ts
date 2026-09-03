@@ -28,7 +28,7 @@ export type {
   TableModel,
 } from './types.ts'
 
-export { monthIndexOf, maizePeak, maizeDemoHighlight, tableFor } from './data.ts'
+export { tempPeak, tableFor, rowCountFor, TOTAL_ROWS } from './data.ts'
 export { useChartHighlight } from './useHighlight.ts'
 export {
   asHighlightEvent,

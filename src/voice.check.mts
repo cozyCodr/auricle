@@ -2,11 +2,14 @@
  * voice.check.mts — browserless unit checks for the PURE intent matcher.
  *
  * Web Speech and `document.modelContext` need a real browser, but `planIntent`
- * is a pure function (transcript + focus context → ordered tool-call plan), so
- * the rehearsed phrases can be asserted headless. This proves each demo phrase
- * resolves to the exact ordered tool names + args an external agent would send,
- * including the focus-then-act sequencing (a `focus_chart` prefix appears only
- * when the target chart isn't already focused).
+ * is a pure function (transcript + workspace/focus context → ordered tool-call
+ * plan), so the rehearsed phrases can be asserted headless. This proves each
+ * demo phrase resolves to the exact ordered tool names + args an external agent
+ * would send under the workspace arc:
+ *   - an uncommissioned target chart gets a `create_view` prefix (create_view
+ *     commissions AND focuses, so no focus_chart is needed after it),
+ *   - a commissioned-but-unfocused target gets a `focus_chart` prefix,
+ *   - a focused target gets no prefix at all.
  *
  * Run:  npx tsx src/voice.check.mts
  */
@@ -19,10 +22,17 @@ function fmt(plan: readonly ToolCall[]): string[] {
   return plan.map((c) => `${c.tool}(${JSON.stringify(c.args)})`)
 }
 
-const NOTHING_FOCUSED: IntentContext = { focusedId: null }
-const MAIZE_FOCUSED: IntentContext = { focusedId: 'maize-prices' }
-const MORTALITY_FOCUSED: IntentContext = { focusedId: 'under5-mortality' }
-const EXCHANGE_FOCUSED: IntentContext = { focusedId: 'exchange-rate' }
+const SHELF: IntentContext = { focusedId: null, commissioned: [] }
+const TEMP_FOCUSED: IntentContext = { focusedId: 'temp-anomaly', commissioned: ['temp-anomaly'] }
+const TEMP_UNFOCUSED: IntentContext = {
+  focusedId: 'co2-emitters',
+  commissioned: ['temp-anomaly', 'co2-emitters'],
+}
+const EMITTERS_FOCUSED: IntentContext = {
+  focusedId: 'co2-emitters',
+  commissioned: ['temp-anomaly', 'co2-emitters'],
+}
+const LIVE_FOCUSED: IntentContext = { focusedId: 'co2-live', commissioned: ['co2-live'] }
 
 interface Case {
   transcript: string
@@ -32,91 +42,127 @@ interface Case {
 }
 
 const CASES: Case[] = [
-  // describe the screen → the global orientation tool, no focus needed.
+  // describe the screen → the global orientation tool, works in any state.
   {
     transcript: 'describe the screen',
-    ctx: MAIZE_FOCUSED,
+    ctx: SHELF,
     intent: 'describe-screen',
     expect: ['describe_screen({})'],
   },
   {
     transcript: 'where am I',
-    ctx: NOTHING_FOCUSED,
+    ctx: TEMP_FOCUSED,
     intent: 'describe-screen',
     expect: ['describe_screen({})'],
   },
-  // focus the exchange rate → focus_chart with the mapped id.
+  // "show me warming over time" on the shelf → commission the warming curve.
   {
-    transcript: 'focus the exchange rate',
-    ctx: MAIZE_FOCUSED,
-    intent: 'focus-chart',
-    expect: ['focus_chart({"chart_id":"exchange-rate"})'],
+    transcript: 'show me warming over time',
+    ctx: SHELF,
+    intent: 'create-warming',
+    expect: ['create_view({"dataset":"temp-anomaly"})'],
   },
-  // "focus the kwacha" maps the spoken word to the exchange-rate chart.
   {
-    transcript: 'show me the kwacha',
-    ctx: NOTHING_FOCUSED,
-    intent: 'focus-chart',
-    expect: ['focus_chart({"chart_id":"exchange-rate"})'],
+    transcript: 'build the warming chart',
+    ctx: SHELF,
+    intent: 'create-warming',
+    expect: ['create_view({"dataset":"temp-anomaly"})'],
   },
-  // when did maize spike → focus maize first (not focused), then find_extremes.
+  // …already commissioned → just refocus it.
   {
-    transcript: 'when did maize spike',
-    ctx: NOTHING_FOCUSED,
-    intent: 'maize-extremes',
-    expect: ['focus_chart({"chart_id":"maize-prices"})', 'maize-prices_find_extremes({})'],
+    transcript: 'show me warming over time',
+    ctx: TEMP_UNFOCUSED,
+    intent: 'create-warming',
+    expect: ['focus_chart({"chart_id":"temp-anomaly"})'],
   },
-  // …but if maize is ALREADY focused, no redundant focus_chart prefix.
+  // "when was the hottest year" on the shelf → commission, then find_extremes
+  // (create_view focuses, so NO focus_chart in between).
+  {
+    transcript: 'when was the hottest year',
+    ctx: SHELF,
+    intent: 'hottest-year',
+    expect: ['create_view({"dataset":"temp-anomaly"})', 'temp-anomaly_find_extremes({})'],
+  },
+  // …commissioned but unfocused → focus_chart prefix instead of create_view.
   {
     transcript: "what's the peak",
-    ctx: MAIZE_FOCUSED,
-    intent: 'maize-extremes',
-    expect: ['maize-prices_find_extremes({})'],
+    ctx: TEMP_UNFOCUSED,
+    intent: 'hottest-year',
+    expect: ['focus_chart({"chart_id":"temp-anomaly"})', 'temp-anomaly_find_extremes({})'],
   },
-  // The second phrase in the submission video must drive the documented range.
+  // …already focused → no prefix at all.
   {
-    transcript: 'How much did it rise from 2022?',
-    ctx: MAIZE_FOCUSED,
-    intent: 'maize-range',
-    expect: [
-      'maize-prices_query_range({"start":"2022-01","end":"2025-01"})',
-    ],
+    transcript: 'when did it spike',
+    ctx: TEMP_FOCUSED,
+    intent: 'hottest-year',
+    expect: ['temp-anomaly_find_extremes({})'],
   },
-  // play it as sound → sonify the FOCUSED chart (exchange here).
+  // "who emits the most" on the shelf → commission emitters + compare.
+  {
+    transcript: 'who emits the most',
+    ctx: SHELF,
+    intent: 'compare-emitters',
+    expect: ['create_view({"dataset":"co2-emitters"})', 'co2-emitters_compare_emitters({})'],
+  },
+  // …emitters focused → straight to the ranking.
+  {
+    transcript: 'who emits the most',
+    ctx: EMITTERS_FOCUSED,
+    intent: 'compare-emitters',
+    expect: ['co2-emitters_compare_emitters({})'],
+  },
+  // The range beat: years are parsed and passed through.
+  {
+    transcript: 'How much did it warm from 1950?',
+    ctx: TEMP_FOCUSED,
+    intent: 'warming-range',
+    expect: ['temp-anomaly_query_range({"start":1950,"end":2025})'],
+  },
+  // "what's CO2 right now" on the shelf → commission the live feed + read it.
+  {
+    transcript: "what's CO2 right now",
+    ctx: SHELF,
+    intent: 'current-co2',
+    expect: ['create_view({"dataset":"co2-live"})', 'co2-live_current_value({})'],
+  },
+  {
+    transcript: 'current co2',
+    ctx: LIVE_FOCUSED,
+    intent: 'current-co2',
+    expect: ['co2-live_current_value({})'],
+  },
+  // "play the century as sound" with nothing focused → the century IS the
+  // warming curve: commission it, then sonify.
+  {
+    transcript: 'play the century as sound',
+    ctx: SHELF,
+    intent: 'sonify',
+    expect: ['create_view({"dataset":"temp-anomaly"})', 'temp-anomaly_sonify({})'],
+  },
+  // sonify with a focused view → play THAT view.
   {
     transcript: 'play it as sound',
-    ctx: EXCHANGE_FOCUSED,
+    ctx: LIVE_FOCUSED,
     intent: 'sonify',
-    expect: ['exchange-rate_sonify({})'],
+    expect: ['co2-live_sonify({})'],
   },
-  // sonify with nothing focused → falls back to the default hero (maize).
+  // "start over" / "clear" → tear the workspace down.
   {
-    transcript: 'let me hear it',
-    ctx: NOTHING_FOCUSED,
-    intent: 'sonify',
-    expect: ['maize-prices_sonify({})'],
+    transcript: 'start over',
+    ctx: TEMP_UNFOCUSED,
+    intent: 'clear-workspace',
+    expect: ['clear_workspace({})'],
   },
-  // compare countries → focus mortality first, then compare_countries.
   {
-    transcript: 'compare countries',
-    ctx: NOTHING_FOCUSED,
-    intent: 'compare-countries',
-    expect: [
-      'focus_chart({"chart_id":"under5-mortality"})',
-      'under5-mortality_compare_countries({})',
-    ],
-  },
-  // …already on mortality → no redundant focus.
-  {
-    transcript: 'compare the countries',
-    ctx: MORTALITY_FOCUSED,
-    intent: 'compare-countries',
-    expect: ['under5-mortality_compare_countries({})'],
+    transcript: 'clear the workspace',
+    ctx: TEMP_FOCUSED,
+    intent: 'clear-workspace',
+    expect: ['clear_workspace({})'],
   },
   // unmatched chit-chat → no tool call; the transcript is just shown.
   {
     transcript: 'hello there',
-    ctx: MAIZE_FOCUSED,
+    ctx: SHELF,
     intent: 'none',
     expect: [],
   },
@@ -129,10 +175,13 @@ for (const c of CASES) {
   assert.equal(result.intent, c.intent, `intent for "${c.transcript}" → ${c.intent}`)
   assert.deepEqual(got, c.expect, `plan for "${c.transcript}"`)
   const focus = c.ctx.focusedId ?? 'none'
+  const ws = c.ctx.commissioned.length ? c.ctx.commissioned.join('+') : 'shelf'
   console.log(
-    `ok  [focus:${focus}]  "${c.transcript}"  →  ${result.intent}: ${got.length ? got.join(' → ') : '(no tool — shown as question)'}`,
+    `ok  [${ws} · focus:${focus}]  "${c.transcript}"  →  ${result.intent}: ${got.length ? got.join(' → ') : '(no tool — shown as question)'}`,
   )
   passed++
 }
 
-console.log(`\nok — intent matcher: ${passed}/${CASES.length} transcripts resolved to their expected tool plans (focus-then-act sequencing verified).`)
+console.log(
+  `\nok — intent matcher: ${passed}/${CASES.length} transcripts resolved to their expected tool plans (commission/focus-then-act sequencing verified).`,
+)

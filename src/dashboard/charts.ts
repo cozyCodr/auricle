@@ -1,23 +1,23 @@
 /**
  * charts.ts — the single source of truth for chart identity in Auricle.
  *
- * This module owns (a) the typed shapes of the four data envelopes in
+ * This module owns (a) the typed shapes of the four climate data envelopes in
  * `src/data/*.json`, (b) the imported datasets, and (c) `CHARTS`: a typed array
  * of chart metadata whose `headline()` computes a one-line, real-figure summary
  * straight from the imported arrays (never a hardcoded paraphrase — refetch the
  * data and the numbers stay correct).
  *
- * Consumed now by the global orientation tools (2.2) and later by chart
- * rendering (3.1) and the expanded per-chart tool families (3.2), which reuse
- * both the datasets and the JSON-shape types exported here.
+ * Consumed by the global orientation/workspace tools, the chart renderers, and
+ * the per-chart tool families (`surfaces.ts`), which reuse both the datasets
+ * and the JSON-shape types exported here.
  */
 
-import maizeData from '../data/maize-prices.json'
-import mortalityData from '../data/under5-mortality.json'
-import yieldData from '../data/yield-fertilizer.json'
-import exchangeData from '../data/exchange-rate.json'
+import tempData from '../data/temp-anomaly.json'
+import emittersData from '../data/co2-emitters.json'
+import wealthData from '../data/wealth-carbon.json'
+import co2LiveData from '../data/co2-live.json'
 
-// --- JSON envelope shapes (shared with 3.1 / 3.2) --------------------------
+// --- JSON envelope shapes ---------------------------------------------------
 
 /** Common provenance fields present on every data envelope. */
 export interface DataEnvelope {
@@ -28,90 +28,84 @@ export interface DataEnvelope {
   readonly note: string
 }
 
-/** One monthly maize observation: `x` = "YYYY-MM", `y` = ZMW/kg, `n` = markets. */
-export interface MaizePoint {
-  readonly x: string
-  readonly y: number
-  readonly n: number
-}
-export interface MaizeData extends DataEnvelope {
-  readonly commodity: string
-  readonly normalization: string
-  readonly points: readonly MaizePoint[]
-}
-
 /** One yearly point: `x` = calendar year, `y` = value. */
 export interface YearPoint {
   readonly x: number
   readonly y: number
 }
-/** One comparator country's latest under-5 mortality value. */
-export interface Comparator {
+
+/** NASA GISTEMP annual global mean anomaly, °C vs 1951–1980. */
+export interface TempAnomalyData extends DataEnvelope {
+  readonly points: readonly YearPoint[]
+}
+
+/** One big emitting economy's latest-year total (million tonnes CO₂). */
+export interface Emitter {
   readonly country: string
   readonly code: string
   readonly year: number
   readonly value: number
 }
-export interface MortalityData extends DataEnvelope {
-  readonly zambia_series: readonly YearPoint[]
-  readonly comparators_latest: readonly Comparator[]
+/** OWID/Global Carbon Budget: global yearly series + latest-year top emitters. */
+export interface EmittersData extends DataEnvelope {
+  readonly global_series: readonly YearPoint[]
+  readonly emitters_latest: readonly Emitter[]
 }
 
-/** One year of the fertilizer→yield scatter: `x` = fertilizer, `y` = yield. */
-export interface YieldPoint {
-  readonly year: number
+/** One country in the wealth↔carbon scatter: x = GDP/capita, y = t CO₂/capita. */
+export interface WealthPoint {
+  readonly country: string
+  readonly code: string
   readonly x: number
   readonly y: number
 }
-export interface YieldData extends DataEnvelope {
-  readonly source_url_x: string
+export interface WealthCarbonData extends DataEnvelope {
+  readonly year: number
   readonly x_label: string
   readonly y_label: string
-  readonly points: readonly YieldPoint[]
+  readonly points: readonly WealthPoint[]
 }
 
-/** One daily FX close: `x` = "YYYY-MM-DD", `y` = ZMW per USD. */
-export interface FxPoint {
+/** One NOAA weekly mean: `x` = "YYYY-MM-DD" (week start), `y` = ppm. */
+export interface PpmPoint {
   readonly x: string
   readonly y: number
 }
-export interface FxData extends DataEnvelope {
+export interface Co2LiveData extends DataEnvelope {
   readonly live_simulated: boolean
-  readonly points: readonly FxPoint[]
+  readonly points: readonly PpmPoint[]
 }
 
 // --- Typed datasets (import the JSON once; reuse everywhere) ----------------
 
-export const maize = maizeData as MaizeData
-export const mortality = mortalityData as MortalityData
-export const yieldFert = yieldData as YieldData
-export const exchange = exchangeData as FxData
+export const tempAnomaly = tempData as TempAnomalyData
+export const emitters = emittersData as EmittersData
+export const wealthCarbon = wealthData as WealthCarbonData
+export const co2Live = co2LiveData as Co2LiveData
 
-/** All four datasets keyed by chart id, for 3.1/3.2 to reuse. */
+/** All four datasets keyed by chart id. */
 export const DATASETS = {
-  'maize-prices': maize,
-  'under5-mortality': mortality,
-  'yield-fertilizer': yieldFert,
-  'exchange-rate': exchange,
+  'temp-anomaly': tempAnomaly,
+  'co2-emitters': emitters,
+  'wealth-carbon': wealthCarbon,
+  'co2-live': co2Live,
 } as const
 
 // --- Small numeric / formatting helpers ------------------------------------
 
-const MONTHS = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-] as const
-
-/** "2025-01" → "Jan 2025"; "2025-01" or "2025-01-15" both supported. */
-export function fmtMonth(ym: string): string {
-  const [y, m] = ym.split('-')
-  const idx = Number(m) - 1
-  return `${MONTHS[idx] ?? m} ${y}`
-}
-
-/** Round to n decimals and drop trailing zeros (12.10 → "12.1", 5.6 → "5.6"). */
+/** Round to n decimals and drop trailing zeros (1.20 → "1.2", 0.5 → "0.5"). */
 export function round(value: number, decimals = 2): string {
   return Number(value.toFixed(decimals)).toString()
+}
+
+/** Thousands-grouped integer, e.g. 38599 → "38,599". */
+export function fmtInt(value: number): string {
+  return Math.round(value).toLocaleString('en-US')
+}
+
+/** Signed anomaly with unit sign, e.g. 1.28 → "+1.28", -0.17 → "−0.17". */
+export function fmtAnomaly(value: number): string {
+  return value >= 0 ? `+${round(value, 2)}` : `−${round(Math.abs(value), 2)}`
 }
 
 export function minBy<T>(items: readonly T[], key: (t: T) => number): T {
@@ -141,58 +135,54 @@ export function pearson(xs: readonly number[], ys: readonly number[]): number {
 
 // --- Per-chart headline computations (derived from the real arrays) --------
 
-function maizeHeadline(): string {
-  const pts = maize.points
+function tempHeadline(): string {
+  const pts = tempAnomaly.points
   const first = pts[0]
   const last = pts[pts.length - 1]
   const peak = maxBy(pts, (p) => p.y)
-  const ratio = round(peak.y / first.y, 1)
   return (
-    `Peaked at ${round(peak.y)} ZMW/kg in ${fmtMonth(peak.x)}, up ${ratio}× ` +
-    `from ${round(first.y)} in ${fmtMonth(first.x)}; eased to ${round(last.y)} ` +
-    `by ${fmtMonth(last.x)}.`
+    `${pts.length} years of warming, ${first.x}–${last.x}: from ${fmtAnomaly(first.y)} °C ` +
+    `to a record ${fmtAnomaly(peak.y)} °C in ${peak.x}, ${fmtAnomaly(last.y)} in ${last.x}.`
   )
 }
 
-function mortalityHeadline(): string {
-  const s = mortality.zambia_series
-  const first = s[0]
+function emittersHeadline(): string {
+  const s = emitters.global_series
   const last = s[s.length - 1]
-  const share = last.y / first.y
-  const change = share <= 0.5 ? 'more than halved' : 'fell'
+  const top = emitters.emitters_latest[0]
   return (
-    `Zambia's under-5 mortality ${change}, from ${round(first.y, 1)} in ${first.x} ` +
-    `to ${round(last.y, 1)} deaths per 1,000 in ${last.x}.`
+    `Global fossil CO₂ hit ${fmtInt(last.y)} Mt in ${last.x} — a record; ` +
+    `${top.country} leads at ${fmtInt(top.value)} Mt.`
   )
 }
 
-function yieldHeadline(): string {
-  const pts = yieldFert.points
-  const first = pts[0]
-  const last = pts[pts.length - 1]
+function wealthHeadline(): string {
+  const pts = wealthCarbon.points
   const r = pearson(pts.map((p) => p.x), pts.map((p) => p.y))
+  const topCo2 = maxBy(pts, (p) => p.y)
+  const lowCo2 = minBy(pts, (p) => p.y)
   return (
-    `Fertilizer use rose from ${round(first.x)} to ${round(last.x)} kg/ha ` +
-    `(${first.year}–${last.year}) as cereal yield climbed ${round(first.y)}→${round(last.y)} kg/ha; ` +
-    `a positive but rain-dependent link (r≈${round(r, 2)}).`
+    `${pts.length} countries in ${wealthCarbon.year}: per-capita CO₂ runs ` +
+    `${round(lowCo2.y, 2)} t (${lowCo2.country}) to ${round(topCo2.y, 1)} t (${topCo2.country}); ` +
+    `wealth↔carbon correlation r≈${round(r, 2)}.`
   )
 }
 
-function exchangeHeadline(): string {
-  const pts = exchange.points
+function co2LiveHeadline(): string {
+  const pts = co2Live.points
   const last = pts[pts.length - 1]
   const lo = minBy(pts, (p) => p.y)
   const hi = maxBy(pts, (p) => p.y)
-  const live = exchange.live_simulated ? ' (simulated live)' : ''
+  const live = co2Live.live_simulated ? ' (simulated live)' : ''
   return (
-    `${pts.length} daily closes ranging ${round(lo.y)}–${round(hi.y)} ZMW/USD; ` +
-    `latest ${round(last.y)}${live}.`
+    `${pts.length} weekly means at Mauna Loa ranging ${round(lo.y, 2)}–${round(hi.y, 2)} ppm; ` +
+    `latest ${round(last.y, 2)} ppm${live} vs ~280 pre-industrial.`
   )
 }
 
 // --- Chart metadata --------------------------------------------------------
 
-/** Rendering family for a chart, consumed by 3.1's chart components. */
+/** Rendering family for a chart, consumed by the chart components. */
 export type ChartKind = 'line' | 'bar' | 'scatter' | 'live'
 
 /** Stable identity + narratable headline for one chart. */
@@ -210,45 +200,45 @@ export interface ChartMeta {
 }
 
 /**
- * The four charts, in display order. `maize-prices` is the hero.
+ * The four charts, in display order. `temp-anomaly` is the canonical hero.
  * Ids MUST match the data file stems and are reused as surface ids.
  */
 export const CHARTS: readonly ChartMeta[] = [
   {
-    id: 'maize-prices',
-    title: 'Maize meal retail price',
-    unit: 'ZMW per kg',
-    period: '2015–2025, monthly',
+    id: 'temp-anomaly',
+    title: 'Global temperature anomaly',
+    unit: '°C vs 1951–1980',
+    period: `${tempAnomaly.points[0].x}–${tempAnomaly.points[tempAnomaly.points.length - 1].x}, yearly`,
     kind: 'line',
-    source: maize.source,
-    headline: maizeHeadline,
+    source: tempAnomaly.source,
+    headline: tempHeadline,
   },
   {
-    id: 'under5-mortality',
-    title: 'Under-5 mortality',
-    unit: 'deaths per 1,000 live births',
-    period: '2000–2024, yearly',
-    kind: 'line',
-    source: mortality.source,
-    headline: mortalityHeadline,
+    id: 'co2-emitters',
+    title: 'CO₂ emissions by country',
+    unit: 'million tonnes CO₂ per year',
+    period: `${emitters.global_series[0].x}–${emitters.global_series[emitters.global_series.length - 1].x}, yearly`,
+    kind: 'bar',
+    source: emitters.source,
+    headline: emittersHeadline,
   },
   {
-    id: 'yield-fertilizer',
-    title: 'Cereal yield vs fertilizer',
-    unit: `${yieldFert.y_label} vs ${yieldFert.x_label}`,
-    period: '1961–2023, yearly',
+    id: 'wealth-carbon',
+    title: 'Wealth vs carbon',
+    unit: `${wealthCarbon.y_label} vs ${wealthCarbon.x_label}`,
+    period: `${wealthCarbon.points.length} countries, ${wealthCarbon.year}`,
     kind: 'scatter',
-    source: yieldFert.source,
-    headline: yieldHeadline,
+    source: wealthCarbon.source,
+    headline: wealthHeadline,
   },
   {
-    id: 'exchange-rate',
-    title: 'ZMW / USD',
-    unit: 'ZMW per USD',
-    period: 'recent daily (simulated live)',
+    id: 'co2-live',
+    title: 'CO₂ at Mauna Loa',
+    unit: 'ppm',
+    period: 'recent weekly (simulated live)',
     kind: 'live',
-    source: exchange.source,
-    headline: exchangeHeadline,
+    source: co2Live.source,
+    headline: co2LiveHeadline,
   },
 ]
 

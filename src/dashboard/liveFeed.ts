@@ -1,17 +1,18 @@
 /**
- * liveFeed.ts — the ticking session state behind the "live" ZMW/USD card (4.3).
+ * liveFeed.ts — the ticking session state behind the "live" Mauna Loa CO₂ card.
  *
- * The baseline is REAL (30 daily closes from the fawazahmed0 currency-api). This
- * store replays it forward: starting from the last real close it applies a SMALL
- * bounded random walk on a ~5s tick, so the big number and the sparkline move
- * while staying near ~19. Tick #0 is the real close (the seed), so nothing here
- * ever presents a fabricated number as a real market print — the ticks are a
- * clearly-labelled "simulated feed".
+ * The baseline is REAL (~76 weekly means from NOAA GML). This store replays it
+ * forward: starting from the latest real weekly mean (~427 ppm) it applies a
+ * TINY bounded random walk on a ~5s tick, so the big number and the sparkline
+ * move while staying within instrument-noise range of the real value. Tick #0
+ * is the real weekly mean (the seed), so nothing here ever presents a
+ * fabricated number as a real observatory reading — the ticks are a
+ * clearly-labelled "simulated feed" (`live_simulated: true` in the envelope).
  *
  * Two consumers read this:
  *  - React, via {@link useLiveFeed} (a `useSyncExternalStore` subscription), so
  *    the card re-renders each tick.
- *  - The exchange tool family (`surfaces.ts`), via the non-reactive getters
+ *  - The co2-live tool family (`surfaces.ts`), via the non-reactive getters
  *    {@link getCurrentRate}/{@link getSessionStats}/{@link getLiveValues}, so
  *    `current_value`/`session_stats`/`sonify` report the SESSION-LOCAL state —
  *    numbers that exist only in this browsing session and are unknowable to any
@@ -22,17 +23,17 @@
  */
 
 import { useSyncExternalStore } from 'react'
-import { exchange } from './charts.ts'
+import { co2Live } from './charts.ts'
 
-/** Tick cadence (ms). ~5s per the 4.3 brief. */
+/** Tick cadence (ms). */
 export const TICK_MS = 5000
-/** Max per-tick move as a fraction of the last value: ±0.15%. */
-export const STEP_PCT = 0.0015
-/** Hard clamp band around the seed so the walk stays realistic near ~19: ±10%. */
-export const BAND_PCT = 0.1
+/** Max per-tick move as a fraction of the last value: ±0.01% (~±0.04 ppm). */
+export const STEP_PCT = 0.0001
+/** Hard clamp band around the seed so the walk stays near the real ppm: ±0.5%. */
+export const BAND_PCT = 0.005
 
-/** The real last close — tick #0. The whole walk is seeded here. */
-const SEED = exchange.points[exchange.points.length - 1].y
+/** The real latest weekly mean — tick #0. The whole walk is seeded here. */
+const SEED = co2Live.points[co2Live.points.length - 1].y
 /** Lower/upper clamp bounds derived from the seed. */
 const LO = SEED * (1 - BAND_PCT)
 const HI = SEED * (1 + BAND_PCT)
@@ -103,7 +104,7 @@ function buildSnapshot(): LiveSnapshot {
     elapsedMs: startedAt === null ? 0 : Date.now() - startedAt,
     running,
     seed: SEED,
-    source: exchange.source,
+    source: co2Live.source,
   }
 }
 
@@ -158,7 +159,7 @@ export function stopLiveFeed(): void {
   emit()
 }
 
-// --- Non-reactive getters (for the exchange tool family) --------------------
+// --- Non-reactive getters (for the co2-live tool family) ---------------------
 
 /** The current cached snapshot (stable ref between ticks for React). */
 export function getLiveSnapshot(): LiveSnapshot {
@@ -186,7 +187,7 @@ export function getSessionStats(): SessionStats {
     elapsedMs: startedAt === null ? 0 : Date.now() - startedAt,
     count: buffer.length,
     seed: SEED,
-    source: exchange.source,
+    source: co2Live.source,
   }
 }
 
@@ -196,7 +197,7 @@ export function getSessionStats(): SessionStats {
  * duplicated). Before any tick this is exactly the baseline.
  */
 export function getLiveValues(): number[] {
-  return [...exchange.points.map((p) => p.y), ...buffer.slice(1)]
+  return [...co2Live.points.map((p) => p.y), ...buffer.slice(1)]
 }
 
 // --- Subscription -----------------------------------------------------------
