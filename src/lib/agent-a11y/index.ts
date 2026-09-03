@@ -9,8 +9,12 @@
 export { createRegistry, registry } from './registry.ts'
 export type {
   AgentA11yRegistry,
+  ConnectionHost,
+  ConnectionInfo,
+  ConnectionState,
   JSONSchema,
   NarratedResult,
+  RegistryOptions,
   SurfaceDef,
   ToolArgs,
   ToolDef,

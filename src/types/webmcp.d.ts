@@ -34,3 +34,12 @@ declare namespace WebMCP {
 interface Document {
   readonly modelContext?: WebMCP.ModelContext
 }
+
+/**
+ * Some agent hosts inject the model context on `navigator` instead of
+ * `document` (and may do so LATE, after page load). Declared optional so
+ * feature-detection is required at call sites.
+ */
+interface Navigator {
+  readonly modelContext?: WebMCP.ModelContext
+}
