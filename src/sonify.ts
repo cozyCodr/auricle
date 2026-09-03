@@ -184,52 +184,55 @@ export function sonifySeries(rawValues: readonly number[], opts: SonifyOptions =
   const min = Math.min(...values)
   const max = Math.max(...values)
   const stepS = stepMs(n, totalMs) / 1000
-  // Short envelopes relative to the step; capped so dense series stay smooth.
-  const attack = Math.min(0.008, stepS * 0.35)
-  const release = Math.min(0.014, stepS * 0.45)
+  // Glissando envelopes: one continuous voice, so the edges can breathe.
+  const attack = 0.04
+  const release = 0.12
 
   const master = c.createGain()
   master.gain.value = 0.9
   master.connect(c.destination)
 
-  const now = c.currentTime + 0.02 // tiny lead-in so the first note never clips
+  const now = c.currentTime + 0.02 // tiny lead-in so the sweep never clips
   const FLOOR = 0.0001 // exponential ramps can't reach 0 — ramp to a floor instead
+  const norm = (v: number) => (max === min ? 0.5 : (v - min) / (max - min))
 
-  for (let i = 0; i < n; i++) {
-    const t0 = now + i * stepS
-    const isPeak = i === pk
-    const freq = valueToFreq(values[i], min, max)
-
-    const osc = c.createOscillator()
-    osc.type = 'sine'
-    osc.frequency.setValueAtTime(freq, t0)
-
-    const g = c.createGain()
-    const amp = isPeak ? 0.9 : 0.32
-    g.gain.setValueAtTime(FLOOR, t0)
-    g.gain.exponentialRampToValueAtTime(amp, t0 + attack)
-    g.gain.exponentialRampToValueAtTime(FLOOR, t0 + stepS + release)
-
-    osc.connect(g)
-    g.connect(master)
-    osc.start(t0)
-    osc.stop(t0 + stepS + release + 0.02)
-
-    if (isPeak) {
-      // A brief octave-up triangle ping makes the maximum unmistakable.
-      const ping = c.createOscillator()
-      ping.type = 'triangle'
-      ping.frequency.setValueAtTime(freq * 2, t0)
-      const pg = c.createGain()
-      pg.gain.setValueAtTime(FLOOR, t0)
-      pg.gain.exponentialRampToValueAtTime(0.5, t0 + attack)
-      pg.gain.exponentialRampToValueAtTime(FLOOR, t0 + stepS * 1.4 + release)
-      ping.connect(pg)
-      pg.connect(master)
-      ping.start(t0)
-      ping.stop(t0 + stepS * 1.4 + release + 0.02)
-    }
+  // ONE continuous voice gliding through every value — a rising line, not a
+  // zipper of notes — with a crescendo that tracks the value itself: cold
+  // decades whisper (~0.12), the climb swells toward the maximum (~0.85). The
+  // drama IS the data: quiet wobble, then the surge.
+  const osc = c.createOscillator()
+  osc.type = 'sine'
+  osc.frequency.setValueAtTime(valueToFreq(values[0], min, max), now)
+  const g = c.createGain()
+  g.gain.setValueAtTime(FLOOR, now)
+  g.gain.exponentialRampToValueAtTime(Math.max(0.12, 0.12 + 0.73 * norm(values[0])), now + attack)
+  for (let i = 1; i < n; i++) {
+    const t = now + i * stepS
+    osc.frequency.linearRampToValueAtTime(valueToFreq(values[i], min, max), t)
+    g.gain.linearRampToValueAtTime(0.12 + 0.73 * norm(values[i]), t)
   }
+  const tEnd = now + (n - 1) * stepS
+  g.gain.exponentialRampToValueAtTime(FLOOR, tEnd + release)
+  osc.connect(g)
+  g.connect(master)
+  osc.start(now)
+  osc.stop(tEnd + release + 0.05)
+
+  // The maximum stays unmistakable: an octave-up triangle ping at the peak's
+  // moment in time, ringing slightly longer than before.
+  const tPeak = now + pk * stepS
+  const peakFreq = valueToFreq(values[pk], min, max)
+  const ping = c.createOscillator()
+  ping.type = 'triangle'
+  ping.frequency.setValueAtTime(peakFreq * 2, tPeak)
+  const pg = c.createGain()
+  pg.gain.setValueAtTime(FLOOR, tPeak)
+  pg.gain.exponentialRampToValueAtTime(0.55, tPeak + 0.02)
+  pg.gain.exponentialRampToValueAtTime(FLOOR, tPeak + 0.45)
+  ping.connect(pg)
+  pg.connect(master)
+  ping.start(tPeak)
+  ping.stop(tPeak + 0.5)
 
   const durationMs = totalMs + release * 1000 + 60
   const done = new Promise<void>((resolve) => {

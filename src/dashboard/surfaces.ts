@@ -98,6 +98,8 @@ interface SonifySpec extends SonifyResolved {
    * its accumulated ticks here; every other chart is static).
    */
   dynamic?: () => SonifyResolved
+  /** Sweep length override (ms) — the hero century deserves more air than 3s. */
+  totalMs?: number
 }
 
 /**
@@ -128,7 +130,7 @@ function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
         }
       }
       const resolved: SonifyResolved = spec.dynamic ? spec.dynamic() : spec
-      const { durationMs } = sonifySeries(resolved.values)
+      const { durationMs } = sonifySeries(resolved.values, spec.totalMs ? { totalMs: spec.totalMs } : {})
       const secs = Math.round(durationMs / 100) / 10
       const caveat = spec.peakCaveat ? ` ${spec.peakCaveat}` : ''
       const speech =
@@ -311,6 +313,7 @@ function tempFamily(): ToolDef[] {
       peakWithUnit: `${fmtAnomaly(peak.y)} °C`,
       peakLabel: String(peak.x),
       peakCaveat: 'Here the rising pitch IS the warming — the sweep ends near its highest tones.',
+      totalMs: 6500, // the century gets room to breathe: quiet decades, then the surge
     }),
   ]
 }
