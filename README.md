@@ -94,19 +94,28 @@ npm run build        # type-check + production build
 npm run check        # browserless unit checks (registry, workspace arc, tools, sonify, intents)
 ```
 
-**To interview it with an agent**, use Chrome 149+ with the WebMCP flag:
+### Reproduce the demo in 2 minutes (genuine agent execution)
 
-1. `chrome://flags/#enable-webmcp-testing` → **Enabled** → relaunch.
-2. Open Auricle. `document.modelContext` is now present; the five global tools register.
-3. Drive them from any WebMCP client — or from the console:
-   `await window.__auricleRunIntent('when was the hottest year')`.
+1. Chrome 149+ → `chrome://flags/#enable-webmcp-testing` → **Enabled** → relaunch.
+2. Open **https://auricle-khaki.vercel.app** (or `npm run dev`). The page registers its five
+   global tools on `document.modelContext` — nothing visible changes; that's the point.
+3. Point any WebMCP agent at the tab and ask, in your own words:
+   *"What can you do on this page?"* → the agent calls `describe_screen` and onboards itself.
+   *"Show me warming over time."* → the publication yields; a chart is born.
+   *"Show it as stripes."* · *"When was the hottest year?"* · *"Play the century as sound."*
+   (click **Enable sound** in the footer once first) · *"Start over."*
+   Agent clients that work today: ChatGPT's built-in browser with Site Tools, or the
+   [Model Context Tool Inspector](https://github.com/beaufortfrancois/model-context-tool-inspector)
+   extension's natural-language mode — both do the real `getTools()` → reason →
+   `executeTool()` loop against this page.
+4. Watch `await document.modelContext.getTools()` in DevTools before and after a view is
+   commissioned — the chart's tool family registers into existence at runtime.
 
 **No agent? The secret stays a secret.** The page deliberately has no chat box, form, or
-mic — to a visitor it is just a publication. The demo/QA fallback is the silent console
-hook `window.__auricleRunIntent('…')`, which prefers the host's `executeTool` and falls
-back to the registry's shared local pipeline (`executeLocal`) — the *same* registered tool
-definitions, mirror events, and log either way. Click **Enable sound** in the page footer
-once (browsers only start audio from a gesture) to hear the sonifier.
+mic — to a visitor it is just a publication. For development and QA only, a silent console
+hook `window.__auricleRunIntent('…')` drives the same registered tool definitions through
+the host's `executeTool` (falling back to the registry's shared local pipeline where no
+WebMCP host exists). It is a test utility, not the demo path.
 
 ## Data & sources
 
