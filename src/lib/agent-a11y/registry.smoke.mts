@@ -157,6 +157,12 @@ async function main() {
     'mirror event forwarded verbatim',
   )
 
+  // Local execution reuses the exact same definition, mirror bus, and log path.
+  assert.equal(await reg.executeLocal('query_point', { month: '2022-01', v: 99 }), true)
+  assert.equal(reg.log.getSnapshot().length, 2, 'local execution appends to the same log')
+  assert.equal(mirrored.length, 2, 'local execution emits on the same mirror bus')
+  assert.equal(await reg.executeLocal('missing_tool', {}), false, 'unknown local tool is reported')
+
   // --- No-op path: no document.modelContext ---
   delete (globalThis as { document?: unknown }).document
   const off = createRegistry()
@@ -168,6 +174,8 @@ async function main() {
     inputSchema: schema,
     execute: () => ({ speech: 'x' }),
   })
+  assert.equal(await off.executeLocal('describe_screen', {}), true, 'local execution works without WebMCP')
+  assert.equal(off.log.getSnapshot()[0]?.speech, 'x', 'no-host local execution is logged')
   off.registerSurface('s', { describe: 's', tools: [] })
   off.focus('s')
   off.focus('s')

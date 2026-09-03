@@ -1,12 +1,13 @@
 /** Regression checks for truthful local-intent execution status. */
 
 import assert from 'node:assert/strict'
-import { runIntent } from './voice/intents.ts'
+import { registry } from './lib/agent-a11y/registry.ts'
+import { runIntent, runLocalIntent } from './voice/intents.ts'
 
 type FakeTool = { name: string }
 type FakeModelContext = {
   getTools?: () => Promise<FakeTool[]>
-  executeTool?: (tool: FakeTool, args: string) => Promise<unknown>
+  executeTool?: (tool: FakeTool, args: unknown) => Promise<unknown>
 }
 
 function installModelContext(value?: FakeModelContext): void {
@@ -38,6 +39,7 @@ const calls: Array<{ tool: string; args: string }> = []
 installModelContext({
   getTools: async () => [{ name: 'maize-prices_find_extremes' }],
   executeTool: async (tool, args) => {
+    if (typeof args !== 'string') throw new TypeError('legacy host requires JSON string')
     calls.push({ tool: tool.name, args })
   },
 })
@@ -47,4 +49,14 @@ assert.equal(success.failure, undefined)
 assert.deepEqual(calls, [{ tool: 'maize-prices_find_extremes', args: '{}' }])
 
 Reflect.deleteProperty(globalThis, 'document')
-console.log('ok — voice runner reports unavailable, unsupported, missing-tool, and successful execution truthfully')
+registry.registerGlobal({
+  name: 'describe_screen',
+  description: 'Describe the dashboard.',
+  inputSchema: { type: 'object', properties: {} },
+  execute: () => ({ speech: 'Local dashboard description.' }),
+})
+const local = await runLocalIntent('describe the screen')
+assert.equal(local.executed, true)
+assert.equal(registry.log.getSnapshot().at(-1)?.speech, 'Local dashboard description.')
+
+console.log('ok — voice runners report host failures truthfully and local execution reuses the registry pipeline')

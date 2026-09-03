@@ -65,6 +65,8 @@ export interface AgentA11yRegistry {
   focus(surfaceId: string): void
   blur(): void
   isAvailable(): boolean
+  /** Execute a registered definition locally through the same mirror/log path. */
+  executeLocal(toolName: string, args: ToolArgs): Promise<boolean>
   /** The currently focused surface id, or `null`. */
   readonly focused: string | null
   /** Bus of page-mirroring events emitted by executed tools. */
@@ -150,6 +152,30 @@ class Registry implements AgentA11yRegistry {
     this.focusedId = null
   }
 
+  async executeLocal(toolName: string, args: ToolArgs): Promise<boolean> {
+    const global = this.globals.get(toolName)
+    const focusedSurface = this.focusedId ? this.surfaces.get(this.focusedId) : undefined
+    const def = global ?? focusedSurface?.tools.find((tool) => tool.name === toolName)
+    if (!def) return false
+    await this.executeDefinition(def, args)
+    return true
+  }
+
+  /** One execution path for browser-agent calls and the deterministic demo. */
+  private async executeDefinition(def: ToolDef, input: ToolArgs): Promise<NarratedResult> {
+    const result = await def.execute(input)
+    if (result.mirror) this.mirror.emit(result.mirror)
+    this.log.append({
+      tool: def.name,
+      argsSummary: def.argsSummary
+        ? def.argsSummary(input)
+        : defaultArgsSummary(def.name, input),
+      speech: result.speech,
+      ts: Date.now(),
+    })
+    return result
+  }
+
   /** Wrap a {@link ToolDef} into a WebMCP tool and register it under `signal`. */
   private register(def: ToolDef, signal: AbortSignal): void {
     const mc = getModelContext()
@@ -160,16 +186,7 @@ class Registry implements AgentA11yRegistry {
       inputSchema: def.inputSchema,
       execute: async (args) => {
         const input = (args ?? {}) as ToolArgs
-        const result = await def.execute(input)
-        if (result.mirror) this.mirror.emit(result.mirror)
-        this.log.append({
-          tool: def.name,
-          argsSummary: def.argsSummary
-            ? def.argsSummary(input)
-            : defaultArgsSummary(def.name, input),
-          speech: result.speech,
-          ts: Date.now(),
-        })
+        const result = await this.executeDefinition(def, input)
         return { content: [{ type: 'text', text: result.speech }] }
       },
     }

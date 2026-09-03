@@ -22,6 +22,7 @@
 
 import { CHART_IDS } from '../dashboard/charts.ts'
 import { getFocus, DEFAULT_FOCUS } from '../dashboard/focus.ts'
+import { registry } from '../lib/agent-a11y/registry.ts'
 
 /** One planned tool call: the exact name + args an agent would send. */
 export interface ToolCall {
@@ -209,7 +210,34 @@ export async function runIntent(transcript: string): Promise<RunResult> {
     const tools = await mc.getTools()
     const tool = tools.find((t) => t.name === call.tool)
     if (!tool) return { ...plan, executed: false, failure: 'tool-not-found' }
-    await mc.executeTool(tool, JSON.stringify(call.args))
+    // The current WebMCP draft accepts an input object, while Chrome's earlier
+    // developer API accepts a JSON string. Auricle's tools are read-only, so a
+    // rejected object-form call can safely fall back to Chrome's string form.
+    const executeObject = mc.executeTool as unknown as (
+      registeredTool: typeof tool,
+      input: Readonly<Record<string, unknown>>,
+    ) => Promise<unknown>
+    try {
+      await executeObject.call(mc, tool, call.args)
+    } catch {
+      await mc.executeTool(tool, JSON.stringify(call.args))
+    }
+  }
+  return { ...plan, executed: true }
+}
+
+/**
+ * Deterministic in-page rehearsal. It resolves the same intent plan and runs
+ * the exact registered ToolDef handlers through the registry's shared
+ * mirror/log execution path, without relying on a host's page-callable
+ * `executeTool()` implementation.
+ */
+export async function runLocalIntent(transcript: string): Promise<RunResult> {
+  const plan = planIntent(transcript, { focusedId: getFocus() })
+  if (plan.plan.length === 0) return { ...plan, executed: false, failure: 'unmatched' }
+  for (const call of plan.plan) {
+    const executed = await registry.executeLocal(call.tool, call.args)
+    if (!executed) return { ...plan, executed: false, failure: 'tool-not-found' }
   }
   return { ...plan, executed: true }
 }

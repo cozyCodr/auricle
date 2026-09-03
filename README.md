@@ -77,10 +77,10 @@ reports that Site Tools are unavailable. Interviewing the page requires a WebMCP
    built-in browser using GPT-5.6 Sol or Terra. Ask Codex in the conversation beside the browser
    to describe the screen, focus a chart, find the peak, or play it as sound. Codex calls the
    tools registered by the page. The page itself is intentionally not a chatbot.
-2. **Direct WebMCP rehearsal.** When the host exposes WebMCP's imperative execution API, the
-   on-page *Ask Auricle directly* form and optional *Ask by voice* control drive the same registered
-   tools. Their small rehearsed-phrase matcher makes demos deterministic; it is not presented as
-   general natural-language AI.
+2. **Direct deterministic rehearsal.** The on-page *Ask Auricle directly* form executes the same
+   `ToolDef` handlers through the registry's shared mirror/log pipeline, so it also works when a
+   browser agent does not discover the Site Tools. The optional *Ask by voice* control exercises
+   the host API when available. Both use a small rehearsed-phrase matcher, not general-language AI.
 
 ## Run it locally
 

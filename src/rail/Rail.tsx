@@ -18,10 +18,10 @@
  * duration (a static "playing…" label under reduced-motion).
  */
 
-import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { useAgentAvailable, useMirror, useToolLog } from '../lib/agent-a11y'
 import type { LogEntry } from '../lib/agent-a11y'
-import { isIntentExecutionAvailable, runIntent, type RunResult } from '../voice/intents.ts'
+import { runLocalIntent, type RunResult } from '../voice/intents.ts'
 import { setQuestion, useQuestion } from './conversation.ts'
 
 /** Small microphone glyph, reused in the header/question bubble. */
@@ -77,13 +77,7 @@ function failureMessage(failure: RunResult['failure']): string {
 }
 
 /** Deterministic demo fallback that still runs the page's real WebMCP tools. */
-function DirectAsk({
-  enabled,
-  onStatus,
-}: {
-  enabled: boolean
-  onStatus(message: string | null): void
-}) {
+function DirectAsk({ onStatus }: { onStatus(message: string | null): void }) {
   const inputId = useId()
   const [draft, setDraft] = useState('')
   const [running, setRunning] = useState(false)
@@ -91,12 +85,12 @@ function DirectAsk({
   async function submit(event: React.FormEvent) {
     event.preventDefault()
     const text = draft.trim()
-    if (!text || running || !enabled) return
+    if (!text || running) return
     setQuestion(text)
     onStatus(null)
     setRunning(true)
     try {
-      const result = await runIntent(text)
+      const result = await runLocalIntent(text)
       if (!result.executed) onStatus(failureMessage(result.failure))
       else setDraft('')
     } catch {
@@ -120,16 +114,14 @@ function DirectAsk({
           onChange={(event) => setDraft(event.target.value)}
           placeholder="When did maize prices peak?"
           autoComplete="off"
-          disabled={!enabled || running}
+          disabled={running}
         />
-        <button className="rail-ask__button" type="submit" disabled={!enabled || running || !draft.trim()}>
+        <button className="rail-ask__button" type="submit" disabled={running || !draft.trim()}>
           {running ? 'Running…' : 'Ask'}
         </button>
       </div>
       <p className="rail-ask__hint">
-        {enabled
-          ? 'Reliable demo fallback · executes the same registered WebMCP tools.'
-          : 'Available when this browser exposes WebMCP execution.'}
+        Reliable demo fallback · runs the same registered tool definitions and mirror pipeline.
       </p>
     </form>
   )
@@ -180,7 +172,6 @@ function SonifyBar({ seconds }: { seconds: number }) {
 export function Rail() {
   const log = useToolLog()
   const question = useQuestion()
-  const directAskEnabled = useMemo(() => isIntentExecutionAvailable(), [])
   const [localStatus, setLocalStatus] = useState<string | null>(null)
   // Newest-first for display (the store is oldest→newest).
   const newestFirst = [...log].slice().reverse()
@@ -206,7 +197,7 @@ export function Rail() {
 
       <SiteToolsGuide />
 
-      <DirectAsk enabled={directAskEnabled} onStatus={setLocalStatus} />
+      <DirectAsk onStatus={setLocalStatus} />
 
       {question && (
         <div className="rail-q">
