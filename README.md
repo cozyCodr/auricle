@@ -1,130 +1,132 @@
-# Auricle — the dashboard you can interview
+# Auricle — interview the planet
 
-**A data dashboard designed for blind and sighted people to explore through a browser agent.**
+**A climate dashboard that builds itself from your questions, designed so blind and sighted people explore the same evidence together through a browser agent.**
 
-Charts often expose far less information to assistive technology than they show visually.
-Auricle addresses that gap not by asking an agent to guess from pixels, but by making the page
-**self-describing to an agent**: every chart registers [WebMCP](https://learn.chatgpt.com/docs/webmcp)
-tools that answer questions from the page's own data model — exact values, ranges, extremes,
-correlations — and **sonify** a decade into a three-second tone so you can *hear* where the peak
-falls. Every answer is returned as speakable prose with the real figure and its source, and paints
-the chart in sync, so blind and sighted collaborators can share the same evidence.
+The most-shared charts on Earth — the warming curve, the emissions ranking — are a
+screen-reader dead zone: assistive technology reaches them and says **"image."** Auricle
+opens as the opposite extreme: a **raw data shelf** of four real climate datasets
+(NASA GISTEMP, Our World in Data, NOAA Mauna Loa) — *"423 rows. Zero answers."* Tables are
+what a screen reader can already read: accessible, but unanswerable. From there the page is
+built by interviewing it. An agent (or the on-page fallback form) commissions each view
+through [WebMCP](https://webmachinelearning.github.io/webmcp/) tools; the chart draws in,
+**its tool family registers into existence at that moment**, answers come back as speakable
+sentences with the exact figure, and every answer paints the chart in sync. Ask to hear it,
+and 146 years of warming play as a rising tone with a ping on the 2024 record.
+**Every chart on this screen exists because someone asked.**
 
-The data is real: Zambian open-data indicators (maize-meal prices, under-5 mortality,
-cereal-yield, ZMW/USD) fetched from the World Bank, WFP/HDX, and a keyless FX API.
-
-> Auricle is a demonstration of a reusable idea — the **[agent-accessibility grammar](./PATTERN.md)**:
-> five rules for making *any* WebMCP site usable, not just agent-operable. WebMCP is the wiring;
-> the grammar is the accessibility. See **[PATTERN.md](./PATTERN.md)**.
+**Live:** [auricle-khaki.vercel.app](https://auricle-khaki.vercel.app) · **The thesis:** [PATTERN.md](./PATTERN.md)
 
 ## How it uses WebMCP
 
-Every chart's capability is a registered tool. This is the whole product — strip WebMCP out and
-there is no Auricle:
+Every capability is a registered tool. Strip WebMCP out and there is no Auricle. This is the
+real global `create_view` tool (from [`src/dashboard/orientation.ts`](./src/dashboard/orientation.ts),
+wrapped for `document.modelContext.registerTool` by
+[`src/lib/agent-a11y/registry.ts`](./src/lib/agent-a11y/registry.ts)):
 
 ```js
 document.modelContext.registerTool({
-  name: "maize-prices_query_range",
-  description: "Compare the maize price across a date range (start, end as YYYY-MM). " +
-    "Returns start/end values, percent change, and the min & max within the window.",
+  name: "create_view",
+  description:
+    "Commission a view from a dataset: the chart appears in the workspace and its " +
+    "tool family registers at that moment (it did not exist before). The SAME " +
+    "dataset can be commissioned as multiple kinds at once (e.g. temp-anomaly as " +
+    "a line AND as stripes) — idempotent per (dataset, kind) pair. " +
+    "Kinds per dataset: temp-anomaly [line, area, stripes, stat] · " +
+    "co2-emitters [bar, hbar, share, stat] · wealth-carbon [scatter, stat] · " +
+    "co2-live [live, stat].",
   inputSchema: {
     type: "object",
     properties: {
-      start: { type: "string", description: 'Start month "YYYY-MM".' },
-      end:   { type: "string", description: 'End month "YYYY-MM".' },
+      dataset: { type: "string", enum: ["temp-anomaly", "co2-emitters", "wealth-carbon", "co2-live"] },
+      kind:    { type: "string", description: "Optional chart kind; defaults to the dataset's canonical form." },
     },
-    required: ["start", "end"],
+    required: ["dataset"],
   },
-  execute: async ({ start, end }) => ({
-    // answers from the page's own data arrays — not vision-OCR of pixels
-    content: [{ type: "text", text: "From Jan 2022 to Jan 2025, maize meal went 4.76 → 12.11 ZMW/kg, up 154.4%…" }],
+  execute: async ({ dataset, kind }) => ({
+    // commissions the view, registers its tool family, focuses it — then narrates:
+    content: [{ type: "text", text:
+      "Built you the warming curve as a line — 146 rows of it. Its 5 tools just came " +
+      "online: temp-anomaly_query_point, query_range, find_extremes, describe_trend, " +
+      "sonify. Record +1.28 °C in 2024. It is focused and ready to interview." }],
   }),
 }, { signal });
 ```
 
-The tools follow the user's **focus**: a global orientation set (`describe_screen`,
-`list_visualizations`, `focus_chart`) is always registered, and each chart's query family
-registers only while that chart is focused and unregisters when focus moves — mirroring how a
-screen reader has one focus at a time. The live ZMW/USD feed even **re-registers `current_value`
-on every tick**, so `getTools()` visibly changes over the session, and `session_stats` reports
-state that exists only in your browser session.
+## The arc
 
-## Architecture
+1. **Boot: the shelf.** Four dense real-data tables, zero charts, zero chart tools — only the five global tools exist.
+2. **`create_view {"dataset":"temp-anomaly"}`** — the warming curve draws in, and its five-tool family **registers at runtime**. `getTools()` grows mid-session.
+3. **Interview it** — `find_extremes` answers *"+1.28 °C in 2024, the warmest year in the instrumental record"* from the page's own arrays while the gold highlight lands on the point; `sonify` plays the century.
+4. **Reorganize** — *"show it as stripes"* is another `create_view` call: the same 146 rows re-render as queryable warming stripes **beside** the line. Multiple kinds of one dataset coexist; the family registers once per dataset and dies with its last view.
+5. **`clear_workspace`** — every family unregisters, focus clears, and the screen returns to the raw shelf. Ask again to rebuild it differently.
 
-```
-src/
-  lib/agent-a11y/   ← THE REUSABLE LIBRARY (the extractable idea; framework-agnostic)
-    registry.ts       focus-model tool registry: always-on globals + per-surface families
-    mirror.ts         event bus — tools paint the chart
-    log.ts            ring buffer — the plain-words tool-call log
-    react.ts          useSurface / useToolLog / useMirror / useAgentAvailable
-  dashboard/        ← chart metadata (headlines computed from real data), orientation tools,
-                      per-chart tool families, the live-feed session store
-  charts/           ← hand-rolled SVG: LineChart, BarChart, ScatterChart, LiveFeed,
-                      DataTable (WCAG-1.1.1 floor), the mirror→highlight layer
-  rail/             ← Site Tools guidance, latest answer, and an aria-live tool-call log
-  sonify.ts         ← Web Audio pitch-mapped sonification (rule 5)
-  voice.ts          ← optional Web Speech input for the Chrome rehearsal path
-  data/             ← real indicators baked to JSON at build time (+ scripts/fetch-data.ts)
-```
+## Tool inventory
 
-No backend. Without `document.modelContext`, the charts and data tables still work and the rail
-reports that Site Tools are unavailable. Interviewing the page requires a WebMCP-capable host.
+Five global tools are always registered; each dataset's family is **born at runtime** with
+its first commissioned view, swaps in and out with focus, and unregisters when its last view
+is removed — 16 family tools across 4 datasets, **21 tools in all**.
 
-## The two ways to drive it
+| Scope | Tools |
+|---|---|
+| **Global (always on)** | `describe_screen` · `list_visualizations` · `create_view` · `clear_workspace` · `focus_chart` |
+| **temp-anomaly** — NASA GISTEMP v4, 1880–2025 (146 rows) | `query_point` · `query_range` · `find_extremes` · `describe_trend` · `sonify` |
+| **co2-emitters** — OWID / Global Carbon Budget, 1850–2024 (175 rows) | `query_point` · `query_range` · `find_extremes` · `describe_trend` · `compare_emitters` · `sonify` |
+| **wealth-carbon** — OWID, 26 countries, 2022 | `describe_relationship` · `query_nearest` |
+| **co2-live** — NOAA Mauna Loa weekly means (76 rows + session ticks) | `current_value` · `session_stats` · `sonify` |
 
-1. **ChatGPT Site Tools — the primary path.** Open Auricle in the latest ChatGPT desktop app's
-   built-in browser using GPT-5.6 Sol or Terra. Ask Codex in the conversation beside the browser
-   to describe the screen, focus a chart, find the peak, or play it as sound. Codex calls the
-   tools registered by the page. The page itself is intentionally not a chatbot.
-2. **Direct deterministic rehearsal.** The on-page *Ask Auricle directly* form executes the same
-   `ToolDef` handlers through the registry's shared mirror/log pipeline, so it also works when a
-   browser agent does not discover the Site Tools. The optional *Ask by voice* control exercises
-   the host API when available. Both use a small rehearsed-phrase matcher, not general-language AI.
+(Family tool names are prefixed with their dataset id, e.g. `temp-anomaly_find_extremes`.)
+The `co2-live` family **re-registers on every feed tick**, so `current_value`'s description
+in `getTools()` carries the latest ppm — tool listings that visibly change over a session.
+
+**Nine chart kinds** are commissionable, whitelisted per dataset: `line`, `area` (diverging),
+`stripes` (queryable warming stripes), `bar`, `hbar` (ranked), `share` (share-of-total bar —
+the craft-approved pie alternative), `scatter`, `live`, `stat` (single big figure).
 
 ## Run it locally
 
 ```sh
 npm install
-npm run fetch-data   # refresh the baked JSON from live sources (optional — data is committed)
-npm run dev          # http://localhost:5173
+npm run dev          # http://localhost:5173 — works fully offline from the baked JSON
 npm run build        # type-check + production build
+npm run check        # browserless unit checks (registry, workspace arc, tools, sonify, intents)
 ```
 
-**To use ChatGPT Site Tools**, install the latest ChatGPT desktop app, choose GPT-5.6 Sol or
-Terra, open Auricle in the built-in browser, and ask Codex about the page.
-
-**To run the Chrome voice rehearsal**, use a Chrome build with WebMCP testing enabled:
+**To interview it with an agent**, use Chrome 149+ with the WebMCP flag:
 
 1. `chrome://flags/#enable-webmcp-testing` → **Enabled** → relaunch.
-2. Open Auricle. `document.modelContext` is now present; the tools register.
-3. Drive them with the optional *Ask by voice* button or the
-   [Model Context Tool Inspector](https://chromewebstore.google.com/) extension.
+2. Open Auricle. `document.modelContext` is now present; the five global tools register.
+3. Drive them from any WebMCP client — or from the console:
+   `await window.__auricleRunIntent('when was the hottest year')`.
 
-Click **♪ Enable sound** once (browsers only start audio from a gesture) to hear the sonifier.
-
-The production build is deployed on **Vercel** from `main` at
-[auricle-khaki.vercel.app](https://auricle-khaki.vercel.app).
+**No agent? No problem.** The on-page **Ask Auricle directly** form runs the *same*
+registered tool definitions through the registry's shared mirror/log pipeline
+(`executeLocal`) — a deterministic fallback that is itself an accessibility feature for
+users without an agentic browser. Click **♪ Enable sound** once (browsers only start audio
+from a gesture) to hear the sonifier.
 
 ## Data & sources
 
-All figures are real and fetched by [`scripts/fetch-data.ts`](./scripts/fetch-data.ts); see
-[`src/data/README.md`](./src/data/README.md) for what each series actually shows.
+All figures are real, fetched keyless by [`scripts/fetch-data.ts`](./scripts/fetch-data.ts)
+and baked to JSON so the app builds with no network. Re-run with `npm run fetch-data`.
+See [`src/data/README.md`](./src/data/README.md) for what each series actually shows.
 
-- **Maize-meal retail price** — WFP, via [HDX](https://data.humdata.org/) (25kg-bag readings
-  normalized to per-kg; the real 2022–23 methodology gap is preserved, not interpolated)
-- **Under-5 mortality**, **cereal yield**, **fertilizer** — [World Bank Open Data](https://data.worldbank.org/)
-- **ZMW/USD** — fawazahmed0 currency-api (real daily closes; the runtime "live" ticks are a
-  clearly-labelled bounded simulation seeded from the last real close)
+- **Global temperature anomaly, 1880–2025** — [NASA GISTEMP v4](https://data.giss.nasa.gov/gistemp/) (record **+1.28 °C in 2024** vs 1951–1980; 1880 was −0.17)
+- **Global CO₂ + top emitters** — [Our World in Data / Global Carbon Budget](https://ourworldindata.org/grapher/annual-co2-emissions-per-country) (record **38,599 Mt in 2024**; China 12,289 Mt)
+- **GDP per capita vs CO₂ per capita** — [OWID](https://ourworldindata.org/grapher/co2-emissions-vs-gdp), 26 countries, 2022 (r≈0.65)
+- **CO₂ at Mauna Loa** — [NOAA GML weekly means](https://gml.noaa.gov/ccgg/trends/) (latest baked **426.94 ppm**; the runtime ticks are a clearly-labelled bounded simulation seeded from that real value)
+
+Auricle was built first on Zambian open data, then pointed at the planet — the grammar is
+dataset-agnostic (the Zambia fetch logic lives in git history).
 
 ## Accessibility
 
-Auricle is itself built to be accessible: semantic landmarks and headings, `role="img"` +
-real-figure `aria-label` on every chart, a source-cited data-table toggle on each, the tool-call
-log as an `aria-live` region, keyboard-operable controls, and `prefers-reduced-motion` respected.
-It has **not** yet been tested with blind or low-vision users — see the honest limits in
-[PATTERN.md](./PATTERN.md); feedback from that community is the point.
+Semantic landmarks and headings, `role="img"` + real-figure `aria-label` on every chart, a
+source-cited data-table view of every dataset (the shelf *is* the WCAG 1.1.1 floor), the
+tool-call log as an `aria-live` region, keyboard-operable controls, and
+`prefers-reduced-motion` respected. It has **not** yet been tested with blind or low-vision
+users — see the honest limits in [PATTERN.md](./PATTERN.md); feedback from that community is
+the point.
 
 ## License
 
-[MIT](./LICENSE) — © 2026 Auricle contributors. The [grammar](./PATTERN.md) is free to adopt and improve.
+[MIT](./LICENSE) — © 2026 Auricle contributors. The [agent-accessibility grammar](./PATTERN.md) is free to adopt and improve.
