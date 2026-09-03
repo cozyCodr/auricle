@@ -10,6 +10,7 @@ import {
   useWorkspace,
   commissionView,
   refreshLiveSurface,
+  type WorkspaceView,
 } from './dashboard'
 import { startLiveFeed, subscribeLiveFeed } from './dashboard/liveFeed'
 import { ChartCard, useChartHighlight, DataTable, tableFor, rowCountFor, TOTAL_ROWS } from './charts'
@@ -205,31 +206,55 @@ function Shelf() {
   )
 }
 
-/** The commissioned workspace: the focused view large, the rest in a row. */
+/**
+ * One commissioned view instance. Subscribes to the mirror bus for ITS OWN
+ * chartId, so a highlight routes to EVERY rendered view of that dataset — the
+ * line gets its band/point, the stripes ring their year column, hbar/share
+ * ring their bar or segment, and a stat tile flashes.
+ */
+function WorkspaceViewCard({
+  view,
+  variant,
+}: {
+  view: WorkspaceView
+  variant: 'hero' | 'small'
+}) {
+  const chart = getChart(view.chartId)
+  const highlight = useChartHighlight(view.chartId)
+  if (!chart) return null
+  return (
+    <ChartCard chart={chart} kind={view.kind} variant={variant} onFocus={setFocus} highlight={highlight} />
+  )
+}
+
+/**
+ * The commissioned workspace. Views are (chartId, kind) instances — the same
+ * dataset can hang here as several kinds at once. The hero slot shows the
+ * FOCUSED dataset's most-recent view; every other view (including a second
+ * kind of the same dataset) renders in the row.
+ */
 function Workspace() {
   const views = useWorkspace()
   const focusedId = useFocusedChart()
-  const heroView = views.find((v) => v.chartId === focusedId) ?? views[0]
-  const heroChart = getChart(heroView.chartId) ?? CHARTS[0]
-  const others = views.filter((v) => v.chartId !== heroView.chartId)
-  // Mirror-driven: the focused chart's live highlight, painted on the hero.
-  const highlight = useChartHighlight(heroChart.id)
+  const heroView =
+    [...views].reverse().find((v) => v.chartId === focusedId) ?? views[views.length - 1]
+  const others = views.filter((v) => v !== heroView)
 
   return (
     <div className="charts-col">
-      <ChartCard chart={heroChart} variant="hero" onFocus={setFocus} highlight={highlight} />
+      <WorkspaceViewCard
+        key={`${heroView.chartId}:${heroView.kind}`}
+        view={heroView}
+        variant="hero"
+      />
 
       {others.length > 0 && (
         <div className="charts-row" role="list" aria-label="Other commissioned views — click to focus">
-          {others.map((v) => {
-            const c = getChart(v.chartId)
-            if (!c) return null
-            return (
-              <div role="listitem" key={v.chartId}>
-                <ChartCard chart={c} variant="small" onFocus={setFocus} />
-              </div>
-            )
-          })}
+          {others.map((v) => (
+            <div role="listitem" key={`${v.chartId}:${v.kind}`}>
+              <WorkspaceViewCard view={v} variant="small" />
+            </div>
+          ))}
         </div>
       )}
     </div>

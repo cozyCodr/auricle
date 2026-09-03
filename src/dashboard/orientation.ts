@@ -15,7 +15,15 @@
  */
 
 import { registry, type ToolDef } from '../lib/agent-a11y'
-import { CHARTS, CHART_IDS, getChart, type ChartKind } from './charts.ts'
+import {
+  CHARTS,
+  CHART_IDS,
+  getChart,
+  ALL_KINDS,
+  KIND_WHITELIST,
+  KIND_SPEECH,
+  type ChartKind,
+} from './charts.ts'
 import { toolCountFor, toolNamesFor } from './surfaces.ts'
 import { setFocus } from './focus.ts'
 import {
@@ -24,6 +32,7 @@ import {
   getWorkspace,
   getWorkspaceIds,
   isCommissioned,
+  kindsFor,
 } from './workspace.ts'
 import { rowCountFor, TOTAL_ROWS } from '../charts/data.ts'
 
@@ -33,8 +42,6 @@ const WHAT_IS_AURICLE =
   'Auricle is a dashboard you can interview: four real climate datasets ' +
   '(NASA, OWID, NOAA) that you query in plain language through WebMCP tools. ' +
   'It starts as raw tables — every chart exists only because someone asked for it.'
-
-const VALID_KINDS: readonly ChartKind[] = ['line', 'bar', 'scatter', 'live']
 
 /** Human name for a dataset used in commissioning speech. */
 const VIEW_NICKNAME: Record<string, string> = {
@@ -135,6 +142,8 @@ const listVisualizations: ToolDef = {
         id: c.id,
         title: c.title,
         kind: c.kind,
+        kinds: kindsFor(c.id),
+        valid_kinds: KIND_WHITELIST[c.id] ?? [],
         rows: rowCountFor(c.id),
         commissioned,
         focused: registry.focused === c.id,
@@ -147,7 +156,7 @@ const listVisualizations: ToolDef = {
       ? live
           .map(
             (r) =>
-              `${r.id} · ${r.title} · ${r.kind} · ${r.focused ? 'focused' : 'not focused'} · ${r.tools} tool${r.tools === 1 ? '' : 's'}`,
+              `${r.id} · ${r.title} · ${r.kinds.join(' + ')} · ${r.focused ? 'focused' : 'not focused'} · ${r.tools} tool${r.tools === 1 ? '' : 's'}`,
           )
           .join('  |  ')
       : 'No views yet — the workspace is empty.'
@@ -158,13 +167,18 @@ const listVisualizations: ToolDef = {
   },
 }
 
+/** "temp-anomaly [line, area, stripes, stat]" lines for the tool description. */
+const KIND_MENU = CHART_IDS.map((id) => `${id} [${(KIND_WHITELIST[id] ?? []).join(', ')}]`).join(' · ')
+
 const createView: ToolDef = {
   name: 'create_view',
   description:
     'Commission a view from a dataset: the chart appears in the workspace and its ' +
-    'tool family registers at that moment (it did not exist before). Idempotent — ' +
-    'recommissioning an existing view just refocuses it. Datasets: ' +
-    `${CHART_IDS.join(', ')}. Kind defaults to the dataset’s canonical form.`,
+    'tool family registers at that moment (it did not exist before). The SAME ' +
+    'dataset can be commissioned as multiple kinds at once (e.g. temp-anomaly as ' +
+    'a line AND as stripes) — idempotent per (dataset, kind) pair; re-asking an ' +
+    `existing pair just refocuses it. Kinds per dataset: ${KIND_MENU}. ` +
+    'Kind defaults to the dataset’s canonical form.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -175,8 +189,10 @@ const createView: ToolDef = {
       },
       kind: {
         type: 'string',
-        enum: VALID_KINDS,
-        description: 'Optional chart kind; defaults to the dataset’s canonical kind.',
+        enum: ALL_KINDS,
+        description:
+          'Optional chart kind; defaults to the dataset’s canonical kind. ' +
+          `Valid pairs: ${KIND_MENU}.`,
       },
     },
     required: ['dataset'],
@@ -198,18 +214,28 @@ const createView: ToolDef = {
         data: { ok: false, validIds: CHART_IDS },
       }
     }
-    const kind =
-      rawKind && (VALID_KINDS as readonly string[]).includes(rawKind) ? (rawKind as ChartKind) : undefined
-    const result = commissionView(dataset, kind)
+    const allowed = KIND_WHITELIST[dataset] ?? []
+    if (rawKind !== undefined && !(allowed as readonly string[]).includes(rawKind)) {
+      // Helpful, non-throwing: name the dataset's real kinds and how to ask.
+      return {
+        speech:
+          `${chart.title} doesn't render as "${rawKind}". Its kinds: ${allowed.join(', ')}. ` +
+          `Try create_view {"dataset":"${dataset}","kind":"${allowed[1] ?? allowed[0]}"} — ` +
+          `or omit kind for the canonical ${chart.kind}.`,
+        data: { ok: false, dataset, validKinds: allowed },
+      }
+    }
+    const result = commissionView(dataset, rawKind as ChartKind | undefined)
     if (!result) {
       return { speech: `Could not commission "${dataset}".`, data: { ok: false } }
     }
+    const kind = result.view.kind
     const names = toolNamesFor(dataset)
     const rows = rowCountFor(dataset)
     const nickname = VIEW_NICKNAME[dataset] ?? chart.title
     if (!result.created) {
       const speech =
-        `${chart.title} is already in the workspace — refocused it. ` +
+        `${chart.title} is already in the workspace as ${KIND_SPEECH[kind]} — refocused it. ` +
         `Its ${names.length} tools are live: ${names.join(', ')}. ${chart.headline()}`
       return {
         speech,
@@ -217,14 +243,27 @@ const createView: ToolDef = {
         mirror: { kind: 'focus-ring', chartId: dataset },
       }
     }
+    if (!result.familyBorn) {
+      // A NEW kind of an already-commissioned dataset — the living-dashboard
+      // re-render. Same rows, new shape; the family was already registered.
+      const speech =
+        `Rebuilt ${nickname} as ${KIND_SPEECH[kind]} — same ${rows.toLocaleString('en-US')} rows, ` +
+        `new shape, side by side with its other view${kindsFor(dataset).length > 2 ? 's' : ''}. ` +
+        `Its tools are already live. ${chart.headline()}`
+      return {
+        speech,
+        data: { ok: true, created: true, view: result.view, tools: names, kinds: kindsFor(dataset) },
+        mirror: { kind: 'view-created', chartId: dataset, viewKind: kind },
+      }
+    }
     const speech =
-      `Built you ${nickname} — ${rows.toLocaleString('en-US')} rows of it. ` +
+      `Built you ${nickname} as ${KIND_SPEECH[kind]} — ${rows.toLocaleString('en-US')} rows of it. ` +
       `Its ${names.length} tools just came online: ${names.join(', ')}. ` +
       `${chart.headline()} It is focused and ready to interview.`
     return {
       speech,
       data: { ok: true, created: true, view: result.view, tools: names, headline: chart.headline() },
-      mirror: { kind: 'view-created', chartId: dataset, viewKind: result.view.kind },
+      mirror: { kind: 'view-created', chartId: dataset, viewKind: kind },
     }
   },
 }

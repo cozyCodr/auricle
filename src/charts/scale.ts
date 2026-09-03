@@ -69,6 +69,23 @@ export function computeSegments(points: readonly LinePoint[], factor = 1.75): Li
   return segments
 }
 
+/**
+ * Linear mix of two #rrggbb colors, t in [0,1] (0 → a, 1 → b). The small ramp
+ * helper behind the warming-stripes diverging colormap — no d3 required.
+ */
+export function mixHex(a: string, b: string, t: number): string {
+  const pa = parseInt(a.slice(1), 16)
+  const pb = parseInt(b.slice(1), 16)
+  const clamp = Math.max(0, Math.min(1, t))
+  const ch = (shift: number) => {
+    const va = (pa >> shift) & 0xff
+    const vb = (pb >> shift) & 0xff
+    return Math.round(va + (vb - va) * clamp)
+  }
+  const to2 = (v: number) => v.toString(16).padStart(2, '0')
+  return `#${to2(ch(16))}${to2(ch(8))}${to2(ch(0))}`
+}
+
 /** Pick `count` roughly evenly spaced points to use as axis ticks (always includes first + last). */
 export function pickTicks<T>(items: readonly T[], count: number): T[] {
   if (items.length <= count) return items.slice()

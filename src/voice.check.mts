@@ -146,6 +146,68 @@ const CASES: Case[] = [
     intent: 'sonify',
     expect: ['co2-live_sonify({})'],
   },
+  // --- Graph-variety re-renders (P0-01b): same dataset, new kind. ----------
+  // "show it as stripes" — re-render the warming record as stripes; create_view
+  // is idempotent per (dataset, kind) pair, so the plan is always create_view.
+  {
+    transcript: 'show it as stripes',
+    ctx: TEMP_FOCUSED,
+    intent: 'as-stripes',
+    expect: ['create_view({"dataset":"temp-anomaly","kind":"stripes"})'],
+  },
+  {
+    transcript: 'as stripes',
+    ctx: SHELF,
+    intent: 'as-stripes',
+    expect: ['create_view({"dataset":"temp-anomaly","kind":"stripes"})'],
+  },
+  {
+    transcript: 'as an area chart',
+    ctx: TEMP_FOCUSED,
+    intent: 'as-area',
+    expect: ['create_view({"dataset":"temp-anomaly","kind":"area"})'],
+  },
+  // "rank them" — the emitters as ranked horizontal bars.
+  {
+    transcript: 'rank them',
+    ctx: EMITTERS_FOCUSED,
+    intent: 'rank-emitters',
+    expect: ['create_view({"dataset":"co2-emitters","kind":"hbar"})'],
+  },
+  // "what share is China" — the 100% proportion bar, then the ranking tool
+  // (create_view focuses co2-emitters, so compare_emitters is registered).
+  {
+    transcript: 'what share is China',
+    ctx: SHELF,
+    intent: 'share-of-emissions',
+    expect: [
+      'create_view({"dataset":"co2-emitters","kind":"share"})',
+      'co2-emitters_compare_emitters({})',
+    ],
+  },
+  {
+    transcript: 'share of emissions',
+    ctx: EMITTERS_FOCUSED,
+    intent: 'share-of-emissions',
+    expect: [
+      'create_view({"dataset":"co2-emitters","kind":"share"})',
+      'co2-emitters_compare_emitters({})',
+    ],
+  },
+  // "just give me the number" — the FOCUSED dataset as a stat tile…
+  {
+    transcript: 'just give me the number',
+    ctx: LIVE_FOCUSED,
+    intent: 'just-the-number',
+    expect: ['create_view({"dataset":"co2-live","kind":"stat"})'],
+  },
+  // …defaulting to the warming record when nothing is focused.
+  {
+    transcript: 'just the number',
+    ctx: SHELF,
+    intent: 'just-the-number',
+    expect: ['create_view({"dataset":"temp-anomaly","kind":"stat"})'],
+  },
   // "start over" / "clear" → tear the workspace down.
   {
     transcript: 'start over',

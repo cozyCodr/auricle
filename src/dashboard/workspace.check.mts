@@ -79,7 +79,7 @@ async function main() {
   // Import AFTER the mock is installed.
   const { registerOrientationTools } = await import('./orientation.ts')
   const { registry } = await import('../lib/agent-a11y/registry.ts')
-  const { getWorkspace, getWorkspaceIds } = await import('./workspace.ts')
+  const { getWorkspace, getWorkspaceIds, kindsFor, removeView, hasView } = await import('./workspace.ts')
   const { toolNamesFor } = await import('./surfaces.ts')
 
   assert.equal(registry.isAvailable(), true, 'isAvailable() true with mock present')
@@ -150,11 +150,55 @@ async function main() {
   const shelfAgain = await exec('describe_screen')
   assert.ok(shelfAgain.includes('Zero answers'), 'describe_screen is back to the shelf story')
 
+  // 6. GRAPH VARIETY (P0-01b): same dataset, multiple kinds, ONE family.
+  const tempFamily2 = toolNamesFor('temp-anomaly')
+  await exec('create_view', { dataset: 'temp-anomaly' }) // canonical line
+  const rebuilt = await exec('create_view', { dataset: 'temp-anomaly', kind: 'stripes' })
+  assert.ok(rebuilt.includes('stripes'), `kind re-render speech names the kind — got: ${rebuilt}`)
+  assert.ok(rebuilt.includes('already live'), 'kind re-render says the tools are already live')
+  assert.equal(getWorkspace().length, 2, 'two view instances after line + stripes')
+  assert.ok(hasView('temp-anomaly', 'line') && hasView('temp-anomaly', 'stripes'), 'both kinds present')
+  assert.deepEqual(getWorkspaceIds(), ['temp-anomaly'], 'ids stay UNIQUE — one dataset, two drawings')
+  assert.deepEqual(kindsFor('temp-anomaly'), ['line', 'stripes'], 'kindsFor lists both drawings')
+  assert.deepEqual(
+    await toolNames(),
+    [...GLOBALS, ...tempFamily2].sort(),
+    'ONE temp family registered across both views (no duplicate tools)',
+  )
+
+  // Idempotent per (dataset, kind) PAIR: re-asking stripes adds nothing.
+  const pairAgain = await exec('create_view', { dataset: 'temp-anomaly', kind: 'stripes' })
+  assert.ok(pairAgain.includes('already'), 'exact-pair recommission narrates idempotence')
+  assert.equal(getWorkspace().length, 2, 'no duplicate (dataset, kind) instance')
+
+  // Invalid (dataset, kind) pair → helpful, NON-THROWING speech listing that
+  // dataset's kinds; nothing is commissioned.
+  const badPair = await exec('create_view', { dataset: 'wealth-carbon', kind: 'stripes' })
+  assert.ok(badPair.includes('scatter') && badPair.includes('stat'), `bad pair lists wealth-carbon's kinds — got: ${badPair}`)
+  assert.ok(!getWorkspaceIds().includes('wealth-carbon'), 'bad pair commissions nothing')
+
+  // Removing ONE view keeps the family (a view of the dataset still renders)…
+  assert.equal(removeView('temp-anomaly', 'stripes'), true, 'removeView removes the stripes instance')
+  assert.equal(getWorkspace().length, 1, 'one temp view left')
+  assert.deepEqual(
+    await toolNames(),
+    [...GLOBALS, ...tempFamily2].sort(),
+    'family SURVIVES while any view of the dataset remains',
+  )
+  // …removing the LAST view tears the family down.
+  assert.equal(removeView('temp-anomaly', 'line'), true, 'removeView removes the last temp view')
+  assert.deepEqual(await toolNames(), GLOBALS, 'last view gone → family unregistered, globals only')
+  assert.equal(getWorkspace().length, 0, 'workspace empty again')
+  assert.equal(registry.focused, null, 'nothing focused after the last view is removed')
+
   console.log('\n--- create_view(temp-anomaly) speech ---\n' + created)
+  console.log('\n--- create_view(temp-anomaly, stripes) re-render speech ---\n' + rebuilt)
+  console.log('\n--- create_view invalid pair speech ---\n' + badPair)
   console.log('\n--- clear_workspace speech ---\n' + cleared)
   console.log(
-    '\nok — workspace arc: boot=globals-only, create_view births view+family (idempotent), ' +
-      'focus swaps families, clear_workspace tears all of it back down to the shelf.',
+    '\nok — workspace arc: boot=globals-only, create_view births view+family (idempotent per ' +
+      '(dataset, kind) pair), multiple kinds of one dataset share ONE family, the family dies ' +
+      'with its LAST view, focus swaps families, clear_workspace tears it all back to the shelf.',
   )
 }
 

@@ -66,9 +66,9 @@ function chartIdFromWords(text: string): string | null {
   return null
 }
 
-/** `create_view` call for a dataset id. */
-function createCall(dataset: string): ToolCall {
-  return { tool: 'create_view', args: { dataset } }
+/** `create_view` call for a dataset id (optionally with an explicit kind). */
+function createCall(dataset: string, kind?: string): ToolCall {
+  return { tool: 'create_view', args: kind ? { dataset, kind } : { dataset } }
 }
 
 /** `focus_chart` call for a chart id. */
@@ -111,6 +111,44 @@ const RULES: readonly IntentRule[] = [
     intent: 'clear-workspace',
     test: /start\s+over|start\s+again|clear\b|reset|tear\s+(it\s+)?down|empty\s+the\s+workspace/i,
     resolve: () => [{ tool: 'clear_workspace', args: {} }],
+  },
+  // --- Graph-variety re-renders (P0-01b): the SAME dataset as a new kind. ---
+  // "show it as stripes" / "as stripes" — the warming record, re-rendered.
+  {
+    intent: 'as-stripes',
+    test: /\bas\s+(warming\s+)?stripes\b|\bstripes\b/i,
+    resolve: () => [createCall(TEMP, 'stripes')],
+  },
+  // "as an area chart" — the diverging red/blue area around zero.
+  {
+    intent: 'as-area',
+    test: /\bas\s+an?\s+area(\s+chart)?\b|\barea\s+chart\b/i,
+    resolve: () => [createCall(TEMP, 'area')],
+  },
+  // "rank them" — the emitters as ranked horizontal bars.
+  {
+    intent: 'rank-emitters',
+    test: /\brank\s+(them|the\s+(countries|emitters))\b|\bas\s+ranked\s+bars\b/i,
+    resolve: () => [createCall(EMITTERS, 'hbar')],
+  },
+  // "what share is China" / "share of emissions" — the 100% proportion bar,
+  // then the ranking tool so the shares are narrated with real figures.
+  {
+    intent: 'share-of-emissions',
+    test: /what\s+share\s+is|share\s+of\s+(the\s+)?emissions?|\bas\s+shares?\b/i,
+    resolve: () => [
+      createCall(EMITTERS, 'share'),
+      { tool: `${EMITTERS}_compare_emitters`, args: {} },
+    ],
+  },
+  // "just give me the number" — the focused dataset (default: warming) as a
+  // big-number stat tile.
+  {
+    intent: 'just-the-number',
+    test: /just\s+(give\s+me\s+)?the\s+number|\bjust\s+the\s+figure\b|\bas\s+a\s+(big\s+)?number\b/i,
+    resolve: (_t, ctx) => [
+      createCall(ctx.focusedId && IDS.has(ctx.focusedId) ? ctx.focusedId : TEMP, 'stat'),
+    ],
   },
   // "what's CO2 right now" / "current co2" — the live view + its current value.
   {

@@ -14,7 +14,7 @@
 
 import { useId, useState } from 'react'
 import { useAgentAvailable } from '../lib/agent-a11y'
-import type { ChartMeta } from '../dashboard/charts.ts'
+import { KIND_LABEL, type ChartMeta, type ChartKind } from '../dashboard/charts.ts'
 import { toolNamesFor, toolCountFor } from '../dashboard/surfaces.ts'
 import type { ChartVariant } from './types.ts'
 import type { MirrorHighlightEvent } from './highlight.ts'
@@ -24,6 +24,8 @@ import { tableFor } from './data.ts'
 
 interface ChartCardProps {
   chart: ChartMeta
+  /** The view's drawing kind; defaults to the dataset's canonical kind. */
+  kind?: ChartKind
   variant: ChartVariant
   onFocus: (id: string) => void
   highlight?: MirrorHighlightEvent
@@ -68,9 +70,12 @@ function TableToggle({ chartId }: { chartId: string }) {
   )
 }
 
-export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps) {
+export function ChartCard({ chart, kind, variant, onFocus, highlight }: ChartCardProps) {
   const titleId = useId()
   const agentAvailable = useAgentAvailable()
+  const resolvedKind: ChartKind = kind ?? chart.kind
+  // Plain-text kind note so two views of the same dataset read apart.
+  const kindNote = resolvedKind === chart.kind ? '' : ` · ${KIND_LABEL[resolvedKind]}`
 
   if (variant === 'hero') {
     return (
@@ -82,6 +87,7 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
             </h2>
             <p className="card__sub">
               {chart.unit} · {chart.period}
+              {kindNote}
             </p>
           </div>
           <div className="card__badge">
@@ -93,7 +99,7 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
         </div>
 
         <div className="card__figure card__figure--hero">
-          <ChartFigure chartId={chart.id} variant="hero" highlight={highlight} />
+          <ChartFigure chartId={chart.id} kind={resolvedKind} variant="hero" highlight={highlight} />
         </div>
 
         <ToolChips chartId={chart.id} available={agentAvailable} />
@@ -102,18 +108,20 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
     )
   }
 
-  // Small (unfocused) card — the figure is a focus button.
+  // Small card — the figure is a focus button. A small view still paints its
+  // chart's mirror highlights (every rendered view of a chartId gets them).
   return (
     <section className="card card--small" aria-labelledby={titleId}>
       <button type="button" className="card__focus" onClick={() => onFocus(chart.id)}>
         <span className="card__title card__title--small" id={titleId}>
           {chart.title}
+          {kindNote}
         </span>
         <span className="card__caption">
           {chart.unit} · unfocused — {agentAvailable ? 'Site Tools inactive' : 'WebMCP unavailable'}
         </span>
         <span className="card__figure card__figure--small">
-          <ChartFigure chartId={chart.id} variant="small" />
+          <ChartFigure chartId={chart.id} kind={resolvedKind} variant="small" highlight={highlight} />
         </span>
         <span className="card__focus-hint">Click to focus →</span>
       </button>

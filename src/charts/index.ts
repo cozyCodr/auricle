@@ -14,6 +14,16 @@ export { ScatterChart } from './ScatterChart.tsx'
 export type { ScatterChartProps } from './ScatterChart.tsx'
 export { LiveFeed } from './LiveFeed.tsx'
 export type { LiveFeedProps } from './LiveFeed.tsx'
+export { AreaChart } from './AreaChart.tsx'
+export type { AreaChartProps } from './AreaChart.tsx'
+export { StripesChart } from './StripesChart.tsx'
+export type { StripesChartProps } from './StripesChart.tsx'
+export { HBarChart } from './HBarChart.tsx'
+export type { HBarChartProps } from './HBarChart.tsx'
+export { ShareBar } from './ShareBar.tsx'
+export type { ShareBarProps } from './ShareBar.tsx'
+export { StatTile } from './StatTile.tsx'
+export type { StatTileProps } from './StatTile.tsx'
 export { DataTable } from './DataTable.tsx'
 export { ChartFigure } from './ChartFigure.tsx'
 export { ChartCard } from './ChartCard.tsx'
@@ -28,7 +38,18 @@ export type {
   TableModel,
 } from './types.ts'
 
-export { tempPeak, tableFor, rowCountFor, TOTAL_ROWS } from './data.ts'
+export {
+  tempPeak,
+  tableFor,
+  rowCountFor,
+  TOTAL_ROWS,
+  emitterRanked,
+  emitterShares,
+  shareYear,
+  shareGlobalTotal,
+  statFor,
+} from './data.ts'
+export type { ShareSegment, StatSpec } from './data.ts'
 export { useChartHighlight } from './useHighlight.ts'
 export {
   asHighlightEvent,

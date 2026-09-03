@@ -1,28 +1,39 @@
 /**
- * ChartFigure — per-chart dispatch to the right SVG component.
+ * ChartFigure — per-view dispatch to the right SVG component.
  *
- * One place that knows which of the four hand-rolled components draws each chart
- * id, and its per-chart specifics (axis labels, formatters, the visual mirror).
- * co2-emitters shows the global emissions LINE plus the top-emitter BAR strip in
- * the hero (so `compare_emitters` has bars to emphasise); the small card shows
- * the bars alone.
+ * One place that knows how each (chartId, kind) pair is drawn. Since P0-01b a
+ * dataset can be commissioned as MULTIPLE kinds at once (temp-anomaly as line
+ * AND stripes, co2-emitters as bars, ranked hbars, or a share-of-total bar,
+ * any dataset as a big-number stat tile), so dispatch is on `kind` with the
+ * dataset picking the series. `kind` defaults to the dataset's canonical kind.
  *
  * `highlight` is a `MirrorHighlightEvent` from the mirror bus (via
- * `useChartHighlight`). Each chart maps the event to its own overlay — a line
- * band/point, a bar ring, a scatter ring, or the live answer pill.
+ * `useChartHighlight`). Every rendered view of a chartId receives the same
+ * event and maps it to its own overlay — line/area band or point, the ringed
+ * stripe column, the ringed hbar/share segment, or the stat tile's flash.
  */
 
-import { getChart, wealthCarbon, fmtAnomaly } from '../dashboard/charts.ts'
+import { getChart, wealthCarbon, fmtAnomaly, type ChartKind } from '../dashboard/charts.ts'
 import type { ChartVariant } from './types.ts'
 import { LineChart } from './LineChart.tsx'
 import { BarChart } from './BarChart.tsx'
 import { ScatterChart } from './ScatterChart.tsx'
 import { Co2LiveFeed } from './LiveFeed.tsx'
+import { AreaChart } from './AreaChart.tsx'
+import { StripesChart } from './StripesChart.tsx'
+import { HBarChart } from './HBarChart.tsx'
+import { ShareBar } from './ShareBar.tsx'
+import { StatTile } from './StatTile.tsx'
 import {
   tempLine,
   emittersGlobalLine,
   emitterBars,
+  emitterRanked,
+  emitterShares,
+  shareYear,
+  shareGlobalTotal,
   wealthScatter,
+  statFor,
 } from './data.ts'
 import { lineHighlightFromMirror, type MirrorHighlightEvent } from './highlight.ts'
 
@@ -34,21 +45,28 @@ function ariaFor(chartId: string): string {
 
 export function ChartFigure({
   chartId,
+  kind,
   variant,
   highlight,
 }: {
   chartId: string
+  /** The view's kind; defaults to the dataset's canonical kind. */
+  kind?: ChartKind
   variant: ChartVariant
-  /** The current mirror highlight event for this chart (hero only), or undefined. */
+  /** The current mirror highlight event for this chart, or undefined. */
   highlight?: MirrorHighlightEvent
 }) {
+  const chart = getChart(chartId)
+  const resolvedKind: ChartKind = kind ?? chart?.kind ?? 'line'
   const aria = ariaFor(chartId)
   // Only apply an event that actually targets this chart.
   const ev = highlight && highlight.chartId === chartId ? highlight : undefined
   const lineHl = ev ? lineHighlightFromMirror(ev) ?? undefined : undefined
+  const barEmph = ev && ev.kind === 'bar-emphasis' ? ev : undefined
 
-  switch (chartId) {
-    case 'temp-anomaly':
+  switch (resolvedKind) {
+    case 'line':
+      // temp-anomaly's canonical line (the only whitelisted 'line' pairing).
       return (
         <LineChart
           points={tempLine}
@@ -60,9 +78,34 @@ export function ChartFigure({
         />
       )
 
-    case 'co2-emitters': {
-      const barEmph = ev && ev.kind === 'bar-emphasis' ? ev : undefined
-      // Hero → global emissions line ABOVE the top-emitter strip; small card → bars only.
+    case 'area':
+      // Diverging area: red above the 0 baseline, blue below (see AreaChart's
+      // color note — the one legitimate diverging fill).
+      return (
+        <AreaChart
+          points={tempLine}
+          variant={variant}
+          ariaLabel={`${aria} Shown as a diverging area: red above the 1951–1980 baseline, blue below.`}
+          highlight={lineHl}
+          formatY={(v) => `${fmtAnomaly(v)}°`}
+          formatXTick={(p) => p.label}
+        />
+      )
+
+    case 'stripes':
+      return (
+        <StripesChart
+          points={tempLine}
+          variant={variant}
+          ariaLabel={`${aria} Shown as warming stripes: one column per year, blue for cooler than the 1951–1980 baseline, red for warmer.`}
+          highlight={lineHl}
+          formatValue={(v) => `${fmtAnomaly(v)} °C`}
+        />
+      )
+
+    case 'bar': {
+      // co2-emitters' canonical view: hero → global emissions line ABOVE the
+      // top-emitter strip; small card → bars only.
       if (variant === 'hero') {
         return (
           <div>
@@ -86,10 +129,47 @@ export function ChartFigure({
           </div>
         )
       }
-      return <BarChart data={emitterBars} variant="small" ariaLabel={aria} />
+      return (
+        <BarChart
+          data={emitterBars}
+          variant="small"
+          ariaLabel={aria}
+          emphasisLabel={barEmph?.country}
+          emphasisDetail={barEmph?.detail}
+        />
+      )
     }
 
-    case 'wealth-carbon': {
+    case 'hbar':
+      return (
+        <HBarChart
+          data={emitterRanked}
+          variant={variant}
+          ariaLabel={`${aria} Shown as ranked horizontal bars, largest emitter first.`}
+          emphasisLabel={barEmph?.country}
+          emphasisDetail={barEmph?.detail}
+        />
+      )
+
+    case 'share':
+      return (
+        <ShareBar
+          segments={emitterShares}
+          variant={variant}
+          ariaLabel={
+            `CO₂ emissions as shares of the world total, ${shareYear} ` +
+            `(${Math.round(shareGlobalTotal).toLocaleString('en-US')} Mt): ` +
+            emitterShares
+              .map((s) => `${s.label} ${(s.share * 100).toFixed(1)}%`)
+              .join(', ') +
+            '.'
+          }
+          emphasisLabel={barEmph?.country}
+          emphasisDetail={barEmph?.detail}
+        />
+      )
+
+    case 'scatter': {
       const ring = ev && ev.kind === 'scatter-ring' ? ev : undefined
       return (
         <ScatterChart
@@ -105,7 +185,7 @@ export function ChartFigure({
       )
     }
 
-    case 'co2-live': {
+    case 'live': {
       const answer = ev && ev.kind === 'highlight-point' ? ev : undefined
       return (
         <Co2LiveFeed
@@ -113,6 +193,18 @@ export function ChartFigure({
           ariaLabel={aria}
           answerLabel={answer?.label}
           answerDetail={answer?.detail}
+        />
+      )
+    }
+
+    case 'stat': {
+      const stat = statFor(chartId)
+      return (
+        <StatTile
+          chartId={chartId}
+          variant={variant}
+          ariaLabel={stat ? `${chart?.title ?? chartId}. ${stat.figure} — ${stat.context}.` : aria}
+          flash={Boolean(ev)}
         />
       )
     }

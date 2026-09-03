@@ -183,7 +183,72 @@ function co2LiveHeadline(): string {
 // --- Chart metadata --------------------------------------------------------
 
 /** Rendering family for a chart, consumed by the chart components. */
-export type ChartKind = 'line' | 'bar' | 'scatter' | 'live'
+export type ChartKind =
+  | 'line'
+  | 'bar'
+  | 'scatter'
+  | 'live'
+  | 'area'
+  | 'stripes'
+  | 'hbar'
+  | 'share'
+  | 'stat'
+
+/**
+ * Which kinds each dataset can legitimately be drawn as — the graph-variety
+ * contract behind `create_view`'s (dataset, kind) validation. The FIRST entry
+ * is each dataset's canonical kind (also stored on `ChartMeta.kind`).
+ */
+export const KIND_WHITELIST: Record<string, readonly ChartKind[]> = {
+  'temp-anomaly': ['line', 'area', 'stripes', 'stat'],
+  'co2-emitters': ['bar', 'hbar', 'share', 'stat'],
+  'wealth-carbon': ['scatter', 'stat'],
+  'co2-live': ['live', 'stat'],
+}
+
+/** Every kind any dataset supports (for `create_view`'s inputSchema enum). */
+export const ALL_KINDS: readonly ChartKind[] = [
+  'line',
+  'bar',
+  'scatter',
+  'live',
+  'area',
+  'stripes',
+  'hbar',
+  'share',
+  'stat',
+]
+
+/** Short human label for a kind (card captions — plain text, no badges). */
+export const KIND_LABEL: Record<ChartKind, string> = {
+  line: 'line',
+  bar: 'bars',
+  scatter: 'scatter',
+  live: 'live feed',
+  area: 'diverging area',
+  stripes: 'warming stripes',
+  hbar: 'ranked bars',
+  share: 'share of total',
+  stat: 'single figure',
+}
+
+/** Speech-friendly phrase for a kind, used in `create_view` narration. */
+export const KIND_SPEECH: Record<ChartKind, string> = {
+  line: 'a line',
+  bar: 'bars',
+  scatter: 'a scatter',
+  live: 'a live feed',
+  area: 'a diverging area',
+  stripes: 'stripes',
+  hbar: 'ranked bars',
+  share: 'a share-of-total bar',
+  stat: 'a single big number',
+}
+
+/** Whether (dataset, kind) is a legitimate pairing. */
+export function isValidKind(chartId: string, kind: string): kind is ChartKind {
+  return (KIND_WHITELIST[chartId] ?? []).includes(kind as ChartKind)
+}
 
 /** Stable identity + narratable headline for one chart. */
 export interface ChartMeta {

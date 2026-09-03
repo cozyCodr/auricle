@@ -23,7 +23,17 @@ export function registerDashboard(): void {
   registerOrientationTools()
 }
 
-export { CHARTS, CHART_IDS, getChart, DATASETS } from './charts.ts'
+export {
+  CHARTS,
+  CHART_IDS,
+  getChart,
+  DATASETS,
+  KIND_WHITELIST,
+  ALL_KINDS,
+  KIND_LABEL,
+  KIND_SPEECH,
+  isValidKind,
+} from './charts.ts'
 export type { ChartMeta, ChartKind } from './charts.ts'
 export { registerOrientationTools } from './orientation.ts'
 export { buildSurface, surfaceFor, toolNamesFor, toolCountFor } from './surfaces.ts'
@@ -34,7 +44,10 @@ export {
   getWorkspace,
   getWorkspaceIds,
   isCommissioned,
+  hasView,
+  kindsFor,
+  removeView,
   refreshLiveSurface,
   useWorkspace,
 } from './workspace.ts'
-export type { WorkspaceView } from './workspace.ts'
+export type { WorkspaceView, CommissionResult } from './workspace.ts'
