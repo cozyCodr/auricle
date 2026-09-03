@@ -4,10 +4,9 @@
  * This is the *input modality* for Auricle's demo, not the product's brain. It
  * transcribes a spoken question into text so it can (a) land in the conversation
  * strip as the user's question and (b) feed the local demo-intent matcher
- * (`src/voice/intents.ts`). The PRIMARY interaction model is still an external
- * WebMCP agent (ChatGPT Atlas / Chrome + Gemini) calling the registered tools;
- * voice + the matcher exist so the loop is demonstrable standalone and so the
- * dashboard is reachable by voice for accessibility.
+ * (`src/voice/intents.ts`). The primary interaction model is ChatGPT Site Tools:
+ * a user asks Codex beside the built-in browser and Codex calls the registered
+ * tools. Voice + the matcher are a Chrome testing/rehearsal path.
  *
  * Web Speech is Chrome/WebKit-only and behind a vendor prefix, so everything is
  * feature-detected: `isVoiceSupported()` gates the whole feature and the header

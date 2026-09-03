@@ -8,7 +8,7 @@ import { Rail } from './rail/Rail'
 import { subscribeAudio, isAudioReady, armAudio } from './sonify'
 import { createVoice, isVoiceSupported, type VoiceState } from './voice'
 import { setQuestion } from './rail/conversation'
-import { runIntent } from './voice/intents'
+import { isIntentExecutionAvailable, runIntent } from './voice/intents'
 
 /** Live view of whether Web Audio has been armed (a user gesture resumed it). */
 function useAudioReady(): boolean {
@@ -57,18 +57,24 @@ function LevelBars() {
 }
 
 /**
- * The header push-to-talk mic (Web Speech). Click to start, click to stop; a
- * finished utterance lands as the conversation's question and then runs the
- * local demo-intent matcher (which drives the SAME WebMCP tools an external
- * agent would, when `document.modelContext` is present).
+ * The optional Chrome rehearsal mic (Web Speech). Click to start, click to
+ * stop; a finished utterance lands as the conversation's question and then
+ * runs the small demo-intent matcher through Chrome's imperative WebMCP test
+ * API. In ChatGPT, the primary interaction is speaking or typing to Codex.
  *
- * Feature-detected: renders NOTHING on browsers without Web Speech, so the app
- * stays fully usable. Idle reads "Ask by voice" (never claims it's listening);
- * active reads "Listening…" with animated bars (stilled by reduced-motion).
+ * Feature-detected: renders only when Web Speech and `executeTool()` are both
+ * available. Idle reads "Ask by voice" (never claims it's listening); active
+ * reads "Listening…" with animated bars (stilled by reduced-motion).
  */
 function VoiceMic() {
   // Feature-detect once. Hidden entirely where Web Speech is unavailable.
-  const supported = useMemo(() => isVoiceSupported(), [])
+  // The in-page voice rehearsal needs both Web Speech and the imperative
+  // WebMCP testing API. ChatGPT Site Tools are driven from the Codex
+  // conversation and do not necessarily expose executeTool() to page scripts.
+  const supported = useMemo(
+    () => isVoiceSupported() && isIntentExecutionAvailable(),
+    [],
+  )
   const [state, setState] = useState<VoiceState>('idle')
   const [interim, setInterim] = useState('')
 
@@ -191,7 +197,7 @@ function App() {
           <div className="app-header__tagline">the dashboard you can interview</div>
         </div>
 
-        <div className="app-header__pill">Zambia · open data 2015–2025</div>
+        <div className="app-header__pill">Zambia · six decades of open data</div>
 
         <VoiceMic />
 

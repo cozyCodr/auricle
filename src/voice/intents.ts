@@ -3,17 +3,16 @@
  *
  * ⚠️ HONESTY NOTE FOR THE SUBMISSION: this is NOT natural-language understanding
  * and it is NOT Auricle's primary interaction path. The product's primary path
- * is an EXTERNAL WebMCP agent (ChatGPT Atlas / Chrome + Gemini) that reads the
- * registered tools and calls them. This matcher is a tiny, readable table of a
+ * is the browser agent (for example Codex using ChatGPT Site Tools) that reads
+ * the registered tools and calls them. This matcher is a tiny, readable table of a
  * FEW REHEARSED regex patterns → WebMCP tool-call plans, so the full
- * voice → tool → mirror → log loop can be demonstrated standalone (and by
- * voice for accessibility) without wiring up an external agent for the demo.
+ * voice → tool → mirror → log loop can be rehearsed in WebMCP-enabled Chrome.
  *
  * It drives the SAME registered tools an agent would, via `document.modelContext`
  * (`getTools()` + `executeTool(tool, JSON.stringify(args))`), so the page mirror,
  * the activity log, and the highlight ring all fire IDENTICALLY to an agent call.
- * When `document.modelContext` is absent (WebMCP flag off), execution is a no-op
- * — voice still shows the transcript; only the local tool-firing is skipped.
+ * The control that calls this runner is hidden unless the imperative testing
+ * API is present; execution failures are also reported by `RunResult`.
  *
  * Because only the focused chart's tool family is registered, intents that target
  * a specific chart's tool are planned as `focus_chart(<id>)` THEN the query/sonify
@@ -100,6 +99,23 @@ const RULES: readonly IntentRule[] = [
     resolve: (_t, ctx) =>
       focusThen(MORTALITY, { tool: `${MORTALITY}_compare_countries`, args: {} }, ctx),
   },
+  // "How much did maize rise from 2022 [to 2025]?" — the video range beat.
+  {
+    intent: 'maize-range',
+    test: /(?:how much|change|rise|rose|increase).*(?:from|between)\s+20\d{2}/i,
+    resolve: (text, ctx) => {
+      const years = Array.from(text.matchAll(/\b(20\d{2})\b/g), (match) => match[1])
+      if (!years[0]) return []
+      return focusThen(
+        MAIZE,
+        {
+          tool: `${MAIZE}_query_range`,
+          args: { start: `${years[0]}-01`, end: `${years[1] ?? '2025'}-01` },
+        },
+        ctx,
+      )
+    },
+  },
   // "when did maize spike" / "what's the peak" / "highest" — maize extremes.
   {
     intent: 'maize-extremes',
@@ -155,10 +171,20 @@ function getModelContext(): WebMCP.ModelContext | null {
   return typeof mc === 'object' && mc !== null ? mc : null
 }
 
+/** Whether the page itself can run registered tools for the Chrome voice rehearsal. */
+export function isIntentExecutionAvailable(): boolean {
+  const mc = getModelContext()
+  return Boolean(
+    mc && typeof mc.getTools === 'function' && typeof mc.executeTool === 'function',
+  )
+}
+
 /** Result of running an intent: the resolved plan + whether tools actually ran. */
 export interface RunResult extends IntentPlan {
   /** True when the plan was executed against a live `document.modelContext`. */
   readonly executed: boolean
+  /** Why execution did not complete, when `executed` is false. */
+  readonly failure?: 'unmatched' | 'webmcp-unavailable' | 'execute-unsupported' | 'tool-not-found'
 }
 
 /**
@@ -172,16 +198,17 @@ export interface RunResult extends IntentPlan {
 export async function runIntent(transcript: string): Promise<RunResult> {
   const plan = planIntent(transcript, { focusedId: getFocus() })
   const mc = getModelContext()
-  if (!mc || plan.plan.length === 0) {
-    return { ...plan, executed: false }
+  if (plan.plan.length === 0) return { ...plan, executed: false, failure: 'unmatched' }
+  if (!mc) return { ...plan, executed: false, failure: 'webmcp-unavailable' }
+  if (typeof mc.getTools !== 'function' || typeof mc.executeTool !== 'function') {
+    return { ...plan, executed: false, failure: 'execute-unsupported' }
   }
-  if (typeof mc.executeTool !== 'function') return { ...plan, executed: false }
   for (const call of plan.plan) {
     // Re-read the tool list each step: after focus_chart runs, the newly focused
     // chart's family is registered and its tool becomes findable here.
     const tools = await mc.getTools()
     const tool = tools.find((t) => t.name === call.tool)
-    if (!tool) continue // family not registered (e.g. focus hasn't applied) — skip
+    if (!tool) return { ...plan, executed: false, failure: 'tool-not-found' }
     await mc.executeTool(tool, JSON.stringify(call.args))
   }
   return { ...plan, executed: true }

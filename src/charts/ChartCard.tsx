@@ -13,6 +13,7 @@
  */
 
 import { useId, useState } from 'react'
+import { useAgentAvailable } from '../lib/agent-a11y'
 import type { ChartMeta } from '../dashboard/charts.ts'
 import { toolNamesFor, toolCountFor } from '../dashboard/surfaces.ts'
 import type { ChartVariant } from './types.ts'
@@ -29,10 +30,13 @@ interface ChartCardProps {
 }
 
 /** The live tool-family chips shown on the focused hero card. */
-function ToolChips({ chartId }: { chartId: string }) {
+function ToolChips({ chartId, available }: { chartId: string; available: boolean }) {
   const names = toolNamesFor(chartId)
   return (
-    <div className="chips" aria-label="Registered tools for this chart">
+    <div
+      className="chips"
+      aria-label={available ? 'Site Tools registered for this chart' : 'Site Tool definitions for this chart'}
+    >
       {names.map((n) => (
         <span key={n} className="chip chip--active">
           {n}
@@ -66,6 +70,7 @@ function TableToggle({ chartId }: { chartId: string }) {
 
 export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps) {
   const titleId = useId()
+  const agentAvailable = useAgentAvailable()
 
   if (variant === 'hero') {
     return (
@@ -81,7 +86,9 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
           </div>
           <div className="card__badge">
             <span className="card__badge-dot" aria-hidden="true" />
-            FOCUSED · {toolCountFor(chart.id)} tool{toolCountFor(chart.id) === 1 ? '' : 's'} registered
+            {agentAvailable
+              ? `FOCUSED · ${toolCountFor(chart.id)} Site Tools ready`
+              : 'FOCUSED · WebMCP unavailable'}
           </div>
         </div>
 
@@ -89,7 +96,7 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
           <ChartFigure chartId={chart.id} variant="hero" highlight={highlight} />
         </div>
 
-        <ToolChips chartId={chart.id} />
+        <ToolChips chartId={chart.id} available={agentAvailable} />
         <TableToggle chartId={chart.id} />
       </section>
     )
@@ -102,7 +109,9 @@ export function ChartCard({ chart, variant, onFocus, highlight }: ChartCardProps
         <span className="card__title card__title--small" id={titleId}>
           {chart.title}
         </span>
-        <span className="card__caption">{chart.unit} · unfocused — tools unregistered</span>
+        <span className="card__caption">
+          {chart.unit} · unfocused — {agentAvailable ? 'Site Tools inactive' : 'WebMCP unavailable'}
+        </span>
         <span className="card__figure card__figure--small">
           <ChartFigure chartId={chart.id} variant="small" />
         </span>

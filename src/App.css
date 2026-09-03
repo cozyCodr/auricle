@@ -693,55 +693,51 @@ button.app-header__voice {
   color: var(--faint);
 }
 
-/* Demo question input (display-only stand-in; 4.2 feeds the same slot) */
-.rail-ask {
-  display: flex;
-  gap: 8px;
-}
-
-.rail-ask__input {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  font-size: 13px;
-  padding: 8px 12px;
-  color: var(--ink);
+/* Site Tools status + first-run instructions. */
+.rail-agent {
+  padding: 13px 14px;
   background: var(--surface);
   border: 1px solid var(--border-soft);
-  border-radius: 9px;
+  border-radius: 10px;
 }
 
-.rail-ask__input::placeholder {
+.rail-agent__status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
   color: var(--faint);
-}
-
-.rail-ask__input:focus-visible {
-  outline: 3px solid var(--data-blue);
-  outline-offset: 1px;
-  border-color: var(--data-blue);
-}
-
-.rail-ask__btn {
-  flex-shrink: 0;
-  appearance: none;
-  font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
-  cursor: pointer;
-  color: var(--bg);
-  background: var(--ink);
-  border: 1px solid var(--ink);
-  border-radius: 9px;
-  padding: 8px 15px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.rail-ask__btn:hover {
-  background: #000;
+.rail-agent--ready .rail-agent__status {
+  color: var(--gold-ink);
 }
 
-.rail-ask__btn:focus-visible {
-  outline: 3px solid var(--data-blue);
-  outline-offset: 2px;
+.rail-agent__dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.rail-agent--ready .rail-agent__dot {
+  background: #d69a1e;
+}
+
+.rail-agent__body,
+.rail-agent__prompt {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rail-agent__prompt {
+  color: var(--data-blue);
 }
 
 /* Question bubble (dark, italic) */

@@ -1,14 +1,14 @@
 # Auricle — the dashboard you can interview
 
-**A data dashboard a blind person can use — by talking to their browser's AI agent.**
+**A data dashboard designed for blind and sighted people to explore through a browser agent.**
 
-Canvas and SVG charts are assistive technology's black hole: a screen reader hits one and says
-*"image."* Dead end. Auricle fixes that not by describing the picture, but by making the page
-**self-describing to an agent**: every chart registers [WebMCP](https://github.com/webmachinelearning/webmcp)
+Charts often expose far less information to assistive technology than they show visually.
+Auricle addresses that gap not by asking an agent to guess from pixels, but by making the page
+**self-describing to an agent**: every chart registers [WebMCP](https://learn.chatgpt.com/docs/webmcp)
 tools that answer questions from the page's own data model — exact values, ranges, extremes,
 correlations — and **sonify** a decade into a three-second tone so you can *hear* where the peak
-falls. Every answer is spoken with the real figure and its source, and paints the chart in sync,
-so a blind user and a sighted one are looking at the same conversation.
+falls. Every answer is returned as speakable prose with the real figure and its source, and paints
+the chart in sync, so blind and sighted collaborators can share the same evidence.
 
 The data is real: Zambian open-data indicators (maize-meal prices, under-5 mortality,
 cereal-yield, ZMW/USD) fetched from the World Bank, WFP/HDX, and a keyless FX API.
@@ -62,23 +62,24 @@ src/
                       per-chart tool families, the live-feed session store
   charts/           ← hand-rolled SVG: LineChart, BarChart, ScatterChart, LiveFeed,
                       DataTable (WCAG-1.1.1 floor), the mirror→highlight layer
-  rail/             ← the conversation rail (question, answer, tool-call log as an aria-live region)
+  rail/             ← Site Tools guidance, latest answer, and an aria-live tool-call log
   sonify.ts         ← Web Audio pitch-mapped sonification (rule 5)
-  voice.ts          ← in-page Web Speech input (the accessibility input modality)
+  voice.ts          ← optional Web Speech input for the Chrome rehearsal path
   data/             ← real indicators baked to JSON at build time (+ scripts/fetch-data.ts)
 ```
 
-No backend. The app renders and stays fully usable when `document.modelContext` is absent (the
-WebMCP tools simply don't register).
+No backend. Without `document.modelContext`, the charts and data tables still work and the rail
+reports that Site Tools are unavailable. Interviewing the page requires a WebMCP-capable host.
 
 ## The two ways to drive it
 
-1. **An external WebMCP agent** — the primary path. Open Auricle in ChatGPT's browser (Atlas) or
-   Chrome with WebMCP enabled, and ask your agent to describe the screen, focus a chart, find the
-   peak, or play it as sound. The agent calls the registered tools.
-2. **In-page voice** — the accessibility input modality and a standalone demo: click *Ask by
-   voice*, speak, and a small rehearsed-phrase matcher drives the *same* WebMCP tools locally so
-   the full loop runs without an external agent.
+1. **ChatGPT Site Tools — the primary path.** Open Auricle in the latest ChatGPT desktop app's
+   built-in browser using GPT-5.6 Sol or Terra. Ask Codex in the conversation beside the browser
+   to describe the screen, focus a chart, find the peak, or play it as sound. Codex calls the
+   tools registered by the page. The page itself is intentionally not a chatbot.
+2. **Chrome WebMCP rehearsal.** In WebMCP-enabled Chrome, the optional *Ask by voice* control uses
+   Web Speech plus Chrome's imperative testing API. Its small rehearsed-phrase matcher drives the
+   same registered tools for demo and QA; it is not presented as general natural-language AI.
 
 ## Run it locally
 
@@ -89,11 +90,14 @@ npm run dev          # http://localhost:5173
 npm run build        # type-check + production build
 ```
 
-**To see the WebMCP tools work**, use Chrome **149+** with the flag on:
+**To use ChatGPT Site Tools**, install the latest ChatGPT desktop app, choose GPT-5.6 Sol or
+Terra, open Auricle in the built-in browser, and ask Codex about the page.
+
+**To run the Chrome voice rehearsal**, use a Chrome build with WebMCP testing enabled:
 
 1. `chrome://flags/#enable-webmcp-testing` → **Enabled** → relaunch.
 2. Open Auricle. `document.modelContext` is now present; the tools register.
-3. Drive them with an agent, the *Ask by voice* button, or the
+3. Drive them with the optional *Ask by voice* button or the
    [Model Context Tool Inspector](https://chromewebstore.google.com/) extension.
 
 Click **♪ Enable sound** once (browsers only start audio from a gesture) to hear the sonifier.

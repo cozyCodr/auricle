@@ -2,8 +2,7 @@
  * Rail — the right-hand conversation + tool-activity rail (item 3.3).
  *
  * Top → bottom, matching the mockup:
- *   1. "Conversation" heading + a demo text input (display-only stand-in for the
- *      spoken question; item 4.2 will feed the same slot from speech).
+ *   1. "Conversation" heading + truthful Site Tools availability and guidance.
  *   2. The latest question as a dark bubble (italic), when one has been asked.
  *   3. The latest agent-facing answer as a light bubble — the `speech` of the
  *      most recent tool-log entry (an empty-state line before any tool runs).
@@ -18,10 +17,10 @@
  * duration (a static "playing…" label under reduced-motion).
  */
 
-import { useEffect, useId, useRef, useState } from 'react'
-import { useMirror, useToolLog } from '../lib/agent-a11y'
+import { useEffect, useRef, useState } from 'react'
+import { useAgentAvailable, useMirror, useToolLog } from '../lib/agent-a11y'
 import type { LogEntry } from '../lib/agent-a11y'
-import { setQuestion, useQuestion } from './conversation.ts'
+import { useQuestion } from './conversation.ts'
 
 /** Small microphone glyph, reused in the header/question bubble. */
 function MicIcon({ stroke, size = 15 }: { stroke: string; size?: number }) {
@@ -44,37 +43,24 @@ function MicIcon({ stroke, size = 15 }: { stroke: string; size?: number }) {
   )
 }
 
-/** The demo text input: a display-only stand-in for the spoken question. */
-function QuestionInput() {
-  const [draft, setDraft] = useState('')
-  const inputId = useId()
-
-  function submit(e: React.FormEvent) {
-    e.preventDefault()
-    const text = draft.trim()
-    if (!text) return
-    setQuestion(text)
-    setDraft('')
-  }
-
+/** Truthful first-run guidance: the browser agent owns the conversation. */
+function SiteToolsGuide() {
+  const available = useAgentAvailable()
   return (
-    <form className="rail-ask" onSubmit={submit}>
-      <label htmlFor={inputId} className="sr-only">
-        Type a question to show it in the conversation (demo)
-      </label>
-      <input
-        id={inputId}
-        className="rail-ask__input"
-        type="text"
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="Type a question to show it here (demo)"
-        autoComplete="off"
-      />
-      <button type="submit" className="rail-ask__btn">
-        Ask
-      </button>
-    </form>
+    <div className={`rail-agent${available ? ' rail-agent--ready' : ''}`} role="status">
+      <p className="rail-agent__status">
+        <span className="rail-agent__dot" aria-hidden="true" />
+        {available ? 'Site Tools ready' : 'Site Tools unavailable'}
+      </p>
+      <p className="rail-agent__body">
+        {available
+          ? 'Ask Codex in the conversation beside this browser. Auricle will answer through the page’s registered tools.'
+          : 'Ask Codex after opening Auricle in the latest ChatGPT desktop app with GPT-5.6 Sol or Terra, or use WebMCP-enabled Chrome.'}
+      </p>
+      <p className="rail-agent__prompt">
+        <strong>Try:</strong> “When did maize prices peak?”
+      </p>
+    </div>
   )
 }
 
@@ -145,7 +131,7 @@ export function Rail() {
     <aside className="rail" aria-label="Conversation and tool activity">
       <h2 className="rail__heading">Conversation</h2>
 
-      <QuestionInput />
+      <SiteToolsGuide />
 
       {question && (
         <div className="rail-q">
@@ -159,7 +145,7 @@ export function Rail() {
           <p className="rail-a__text">{latestAnswer}</p>
         ) : (
           <p className="rail-a__text rail-a__text--empty">
-            Ask a chart a question through your agent.
+            Waiting for your browser agent to call an Auricle tool.
           </p>
         )}
         {sonifyMs > 0 && <SonifyBar seconds={Math.round(sonifyMs / 100) / 10} />}

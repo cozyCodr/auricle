@@ -73,6 +73,15 @@ const CASES: Case[] = [
     intent: 'maize-extremes',
     expect: ['maize-prices_find_extremes({})'],
   },
+  // The second phrase in the submission video must drive the documented range.
+  {
+    transcript: 'How much did it rise from 2022?',
+    ctx: MAIZE_FOCUSED,
+    intent: 'maize-range',
+    expect: [
+      'maize-prices_query_range({"start":"2022-01","end":"2025-01"})',
+    ],
+  },
   // play it as sound → sonify the FOCUSED chart (exchange here).
   {
     transcript: 'play it as sound',

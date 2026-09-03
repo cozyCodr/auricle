@@ -6,21 +6,18 @@
 
 ## The web already made this mistake once
 
-HTML gave pages structure. It did **not** make them accessible — a `<div>` soup renders
-fine and is unusable with a screen reader. Accessibility came later, bolted on, through a
-*convention layered on top*: **ARIA**. ARIA is the grammar that says "here is how you expose
-your structure so assistive technology can consume it." We are still, twenty-five years
-later, paying for the gap between HTML shipping and that convention maturing.
+HTML gave pages structure, but structure alone does not guarantee accessibility — a `<div>` soup
+can render fine while exposing little useful meaning to assistive technology. Semantic HTML,
+platform accessibility APIs, and conventions including ARIA now provide a richer accessibility
+layer, but the web still carries the cost of treating that work as an afterthought.
 
 **WebMCP is at its pre-ARIA moment.** The spec lets a page expose tools to an agent. That is
-all it guarantees. Nothing in it requires those tools to be usable by a *person* who is
-driving the agent — and the evidence is already in: of the ~450 sites in the public WebMCP
-directory, the tools are overwhelmingly `add_to_cart` / `checkout` / `search_products`. A
-site can be fully WebMCP-enabled and completely useless to a blind user.
+all it guarantees. Nothing in it requires those tools to orient or serve the *person* who is
+driving the agent. A site can be fully WebMCP-enabled and still be inaccessible.
 
 So WebMCP is not the accessibility solution. **WebMCP is the wiring. The solution is the
-convention we lay on top of it — and it doesn't exist yet.** Auricle is one demonstration of
-that convention. This document is the convention itself.
+convention we lay on top of it — and it is still being shaped.** Auricle demonstrates and
+proposes one such convention; this document is an invitation to test and improve it.
 
 The opportunity is timing. The original web got its accessibility grammar decades too late.
 WebMCP is young enough to get it right **while the standard is still wet cement.**
@@ -78,9 +75,9 @@ query_range(2022-01 … 2025-01)
    (WFP retail prices via HDX). Ask find_extremes for the all-time peak."
 ```
 
-Figure, unit, source, and a steering next-step — every time. (Rule 6 below is that steering
-suffix: results end by suggesting what to ask next, so a non-visual user is never stranded
-wondering what's possible.)
+Figure, unit, source, and a steering next-step — every time. The steering suffix is part of this
+rule: results end by suggesting what to ask next, so a non-visual user is not stranded wondering
+what is possible.
 
 ### 4. Visual mirroring
 
@@ -92,9 +89,9 @@ looking at one artifact, not two disconnected tools.
 
 Auricle mirrors via a small event bus: each tool returns an optional `mirror` event
 (`highlight-range`, `highlight-point`, `bar-emphasis`, `scatter-ring`, `sonify`) that the focused
-chart renders and auto-clears. A REST API has no surface for this; a chatbot answers in a
-separate window. Only a page that owns its own tools can keep the human's view and the agent's
-answer in sync.
+chart renders and auto-clears. A separate API or chatbot could reproduce pieces of this, but
+page-owned tools provide a direct, portable contract between the live page state, the agent's
+answer, and the visual response.
 
 ### 5. Non-visual encodings as first-class tools
 
@@ -109,20 +106,19 @@ sighted user might envy.
 
 ---
 
-## Why this can't be faked without WebMCP
+## Why WebMCP is the right interface
 
-The sharpest test of "genuine WebMCP leverage" is: *would this work as a chatbot with the CSV, or
-as a REST API?* For a self-describing accessible page, no — and precisely because of the grammar:
+The sharpest test of genuine WebMCP leverage is not whether the idea is technically impossible by
+other means. It is whether the page-agent contract makes the experience more direct, portable,
+and trustworthy. For Auricle, it does:
 
-- **Rule 3 + 4** require the answer and the on-screen paint to originate from the *same page state
-  in the same session.* A chatbot answers elsewhere; an API can't highlight the chart.
-- **Rule 2**'s focus model is register/unregister on a live `document.modelContext` — there is no
-  REST equivalent of "the tools change as attention moves."
-- The values themselves are **unknowable offline**: Auricle's answers come from the page's own
-  data arrays (not vision-OCR of chart pixels, which agents misread), and its live feed's
-  `session_stats` reports state that exists *only in this browsing session* — "no offline model or
-  dataset has them." The page is the sole source of truth, and it *tells* the agent, rather than
-  the agent guessing.
+- **Rules 3 + 4** keep the answer and on-screen paint tied to the *same page state in the same
+  session*, instead of requiring a separate integration to coordinate them.
+- **Rule 2** expresses changing attention directly: register/unregister on the live
+  `document.modelContext` makes the available tool surface follow focus.
+- Auricle's answers come from the page's own data arrays rather than visual estimation, and its
+  live feed's `session_stats` reports state that exists only in this browsing session. The page is
+  the source of truth and tells the agent instead of making the agent infer the data from pixels.
 
 That is the accessibility inversion at the heart of the grammar: **the site becomes
 self-describing, instead of relying on the agent to guess.**

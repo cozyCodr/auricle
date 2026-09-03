@@ -9,7 +9,8 @@
  * user's attention is.
  *
  * Framework-agnostic and safe without WebMCP: when `document.modelContext` is
- * absent, every method is a no-op and the app stays fully usable.
+ * absent, registration is a no-op. The visual dashboard and data tables still
+ * work; interviewing the page requires a WebMCP-capable browser agent.
  */
 
 import { MirrorBus, type MirrorEvent } from './mirror.ts'
@@ -76,7 +77,7 @@ export interface AgentA11yRegistry {
 function getModelContext(): WebMCP.ModelContext | null {
   if (typeof document === 'undefined') return null
   const mc = (document as Document).modelContext
-  return typeof mc === 'object' && mc !== null ? mc : null
+  return typeof mc === 'object' && mc !== null && typeof mc.registerTool === 'function' ? mc : null
 }
 
 /** Generic `name(k:v, k2:v2)` summary; `name()` when there are no args. */
