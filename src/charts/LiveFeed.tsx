@@ -57,12 +57,16 @@ export function LiveFeed({
     <div className={`livefeed livefeed--${variant}`}>
       <div className="livefeed__row">
         <div className="livefeed__value" aria-label={ariaLabel}>
-          {formatValue(current)}
+          {/* Keyed by value so each tick remounts the span — the CSS pulse
+              animation re-runs on change (stilled under reduced motion). */}
+          <span key={current} className="livefeed__num">
+            {formatValue(current)}
+          </span>
           {unit && <span className="livefeed__unit"> {unit}</span>}
         </div>
         <span className="livefeed__badge">
           <span className="livefeed__dot" aria-hidden="true" />
-          LIVE
+          live
         </span>
       </div>
 
@@ -77,7 +81,7 @@ export function LiveFeed({
             gap: 1,
             marginTop: hero ? 8 : 4,
             padding: hero ? '6px 12px' : '3px 8px',
-            borderRadius: 8,
+            borderRadius: 2,
             background: 'var(--ink)',
           }}
         >
@@ -92,7 +96,7 @@ export function LiveFeed({
             {answerLabel}
           </span>
           {answerDetail && (
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: hero ? 12 : 10, color: '#e8c778' }}>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: hero ? 12 : 10, color: '#f4a582' }}>
               {answerDetail}
             </span>
           )}
@@ -106,7 +110,7 @@ export function LiveFeed({
         role="img"
         aria-label={`Sparkline of ${series.length} recent closes`}
       >
-        <path d={path} className="livefeed__line" fill="none" />
+        <path d={path} className="livefeed__line" pathLength={1} fill="none" />
         {last && <circle cx={sx(last.x)} cy={sy(last.y)} r={hero ? 4 : 3} className="livefeed__end" />}
       </svg>
 

@@ -64,7 +64,15 @@ export function HBarChart({
             <text x={plotL - 8} y={midY + (hero ? 5 : 3.5)} className="hbar__cat" textAnchor="end">
               {d.label}
             </text>
-            <rect x={plotL} y={y} width={w} height={rowH} rx={hero ? 3 : 2} className="hbar__bar" />
+            <rect
+              x={plotL}
+              y={y}
+              width={w}
+              height={rowH}
+              rx={0}
+              className="hbar__bar"
+              style={{ animationDelay: `${(0.15 + i * 0.07).toFixed(2)}s` }}
+            />
             <text x={plotL + w + 8} y={midY + (hero ? 5 : 3.5)} className="hbar__value">
               {formatValue(d.value)}
             </text>
@@ -84,7 +92,7 @@ export function HBarChart({
         const bx = Math.min(plotL + w + 14, box.w - tw - 4)
         const by = Math.min(Math.max(2, y - 4), box.h - th - 2)
         return (
-          <g>
+          <g className="chart-tip">
             <rect
               x={plotL - 2}
               y={y - 2}
@@ -112,7 +120,7 @@ export function HBarChart({
                 y={by + (hero ? 33 : 27)}
                 fontFamily="var(--font-body)"
                 fontSize={hero ? 12 : 10}
-                fill="#e8c778"
+                fill="#f4a582"
               >
                 {emphasisDetail}
               </text>

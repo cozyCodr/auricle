@@ -1,9 +1,10 @@
 /**
  * ChartCard — the card shell around a chart figure.
  *
- * Two variants:
- *  - `hero`  — large, 2px ink border + offset shadow, a "FOCUSED · N tools
- *    registered" badge, its live tool-family chips, and a table toggle.
+ * Two variants (editorial sections — hairlines and typography, no boxes):
+ *  - `hero`  — large serif headline, an italic muted "Focused — N tools
+ *    listening." note, its tool family as one plain mono text run, and a
+ *    table toggle.
  *  - `small` — compact, dimmed, captioned "unfocused — tools unregistered"; the
  *    whole figure is a real <button> that focuses the chart (agent parity with
  *    the `focus_chart` tool).
@@ -13,7 +14,7 @@
  */
 
 import { useId, useState } from 'react'
-import { useAgentAvailable } from '../lib/agent-a11y'
+import { useAgentAvailable, useToolLog } from '../lib/agent-a11y'
 import { KIND_LABEL, type ChartMeta, type ChartKind } from '../dashboard/charts.ts'
 import { toolNamesFor, toolCountFor } from '../dashboard/surfaces.ts'
 import type { ChartVariant } from './types.ts'
@@ -31,20 +32,33 @@ interface ChartCardProps {
   highlight?: MirrorHighlightEvent
 }
 
-/** The live tool-family chips shown on the focused hero card. */
-function ToolChips({ chartId, available }: { chartId: string; available: boolean }) {
+/** Spell small counts as words for the focused note ("five tools listening"). */
+const COUNT_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'] as const
+function countWord(n: number): string {
+  return COUNT_WORDS[n] ?? String(n)
+}
+
+/**
+ * The focused view's tool family as ONE plain mono text run — names separated
+ * by middots, the most recently invoked tool underlined in ink. No chips, no
+ * lozenges: typography carries the state.
+ */
+function ToolRun({ chartId, available }: { chartId: string; available: boolean }) {
   const names = toolNamesFor(chartId)
+  const log = useToolLog()
+  const lastRun = [...log].reverse().find((e) => names.includes(e.tool))?.tool
   return (
-    <div
-      className="chips"
+    <p
+      className="toolrun"
       aria-label={available ? 'Site Tools registered for this chart' : 'Site Tool definitions for this chart'}
     >
-      {names.map((n) => (
-        <span key={n} className="chip chip--active">
-          {n}
+      {names.map((n, i) => (
+        <span key={n}>
+          {i > 0 && <span aria-hidden="true"> · </span>}
+          <span className={`toolrun__name${n === lastRun ? ' toolrun__name--active' : ''}`}>{n}</span>
         </span>
       ))}
-    </div>
+    </p>
   )
 }
 
@@ -90,19 +104,19 @@ export function ChartCard({ chart, kind, variant, onFocus, highlight }: ChartCar
               {kindNote}
             </p>
           </div>
-          <div className="card__badge">
-            <span className="card__badge-dot" aria-hidden="true" />
+          {/* Focused state as italic muted plain text — no badge, no lozenge. */}
+          <p className="card__focused-note">
             {agentAvailable
-              ? `FOCUSED · ${toolCountFor(chart.id)} Site Tools ready`
-              : 'FOCUSED · WebMCP unavailable'}
-          </div>
+              ? `Focused — ${countWord(toolCountFor(chart.id))} tools listening.`
+              : 'Focused — WebMCP unavailable.'}
+          </p>
         </div>
 
         <div className="card__figure card__figure--hero">
           <ChartFigure chartId={chart.id} kind={resolvedKind} variant="hero" highlight={highlight} />
         </div>
 
-        <ToolChips chartId={chart.id} available={agentAvailable} />
+        <ToolRun chartId={chart.id} available={agentAvailable} />
         <TableToggle chartId={chart.id} />
       </section>
     )

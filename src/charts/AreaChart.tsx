@@ -116,6 +116,7 @@ export function AreaChart({
       <path
         d={buildPath(points, sx, sy)}
         className="areachart__line"
+        pathLength={1}
         fill="none"
         clipPath={`url(#${idBase}-plot)`}
       />

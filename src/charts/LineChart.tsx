@@ -138,6 +138,7 @@ export function LineChart({
           key={`seg${i}`}
           d={buildPath(seg, sx, sy)}
           className="linechart__line"
+          pathLength={1}
           fill="none"
           clipPath={`url(#${clipId})`}
         />
@@ -158,7 +159,7 @@ export function LineChart({
           <g>
             <circle className="linechart__dot" cx={px} cy={py} r={hero ? 5 : 4} />
             {highlight.label && (
-              <g>
+              <g className="chart-tip">
                 <rect className="linechart__tip" x={bx} y={by} width={tw} height={th} rx={8} />
                 <text className="linechart__tip-label" x={bx + 14} y={by + (hero ? 20 : 16)}>
                   {highlight.label}

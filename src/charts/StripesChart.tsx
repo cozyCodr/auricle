@@ -37,8 +37,10 @@ const DEEP_BLUE = '#2166ac'
 const NEAR_WHITE = '#f6f4ee'
 const DEEP_RED = '#67000d'
 
-/** Map a real anomaly onto the diverging ramp given the data's min/max. */
-function stripeColor(v: number, min: number, max: number): string {
+/** Map a real anomaly onto the diverging ramp given the data's min/max.
+    Exported so the masthead's decorative identity band derives its colors
+    from the SAME ramp as this queryable chart. */
+export function stripeColor(v: number, min: number, max: number): string {
   if (v >= 0) return mixHex(NEAR_WHITE, DEEP_RED, max > 0 ? v / max : 0)
   return mixHex(NEAR_WHITE, DEEP_BLUE, min < 0 ? v / min : 0)
 }
@@ -77,10 +79,14 @@ export function StripesChart({
       role="img"
       aria-label={ariaLabel}
     >
-      {/* One column per year, colored by the real anomaly */}
+      {/* One column per year, colored by the real anomaly. Each column carries
+          a staggered wipe-in delay (CSS `stripes__col` animation; instant under
+          prefers-reduced-motion). */}
       {points.map((p, i) => (
         <rect
           key={p.x}
+          className="stripes__col"
+          style={{ animationDelay: `${(i * 0.012).toFixed(3)}s` }}
           x={xFor(i)}
           y={plotT}
           width={cw + 0.5 /* overlap a hair so no seams appear between stripes */}
@@ -114,6 +120,7 @@ export function StripesChart({
         return (
           <rect
             className="stripes__ring"
+            pathLength={1}
             x={xFor(i0)}
             y={plotT + 1}
             width={Math.max(cw, (i1 - i0) * cw)}
@@ -137,13 +144,14 @@ export function StripesChart({
           <g>
             <rect
               className="stripes__ring"
+              pathLength={1}
               x={x - 1}
               y={plotT + 1}
               width={cw + 2}
               height={plotB - plotT - 2}
               rx={2}
             />
-            <g>
+            <g className="chart-tip">
               <rect className="linechart__tip" x={bx} y={by} width={tw} height={th} rx={8} />
               <text className="linechart__tip-label" x={bx + 14} y={by + (hero ? 20 : 16)}>
                 {highlight.label ?? `${value.label}: ${formatValue(value.y)}`}

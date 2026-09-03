@@ -95,7 +95,7 @@ export function ScatterChart({
                   {ringLabel}
                 </text>
                 {ringDetail && (
-                  <text x={bx + 12} y={by + (hero ? 33 : 27)} fontFamily="var(--font-body)" fontSize={hero ? 12 : 10} fill="#e8c778">
+                  <text x={bx + 12} y={by + (hero ? 33 : 27)} fontFamily="var(--font-body)" fontSize={hero ? 12 : 10} fill="#f4a582">
                     {ringDetail}
                   </text>
                 )}

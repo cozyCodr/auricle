@@ -24,34 +24,12 @@ import type { LogEntry } from '../lib/agent-a11y'
 import { runLocalIntent, type RunResult } from '../voice/intents.ts'
 import { setQuestion, useQuestion } from './conversation.ts'
 
-/** Small microphone glyph, reused in the header/question bubble. */
-function MicIcon({ stroke, size = 15 }: { stroke: string; size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={stroke}
-      strokeWidth="2"
-      strokeLinecap="round"
-      aria-hidden="true"
-      className="rail-q__icon"
-    >
-      <rect x="9" y="3" width="6" height="11" rx="3" />
-      <path d="M5 11a7 7 0 0 0 14 0" />
-      <path d="M12 18v3" />
-    </svg>
-  )
-}
-
 /** Truthful first-run guidance: the browser agent owns the conversation. */
 function SiteToolsGuide() {
   const available = useAgentAvailable()
   return (
     <div className={`rail-agent${available ? ' rail-agent--ready' : ''}`} role="status">
       <p className="rail-agent__status">
-        <span className="rail-agent__dot" aria-hidden="true" />
         {available ? 'Site Tools ready' : 'Site Tools unavailable'}
       </p>
       <p className="rail-agent__body">
@@ -60,8 +38,15 @@ function SiteToolsGuide() {
           : 'Ask Codex after opening Auricle in the latest ChatGPT desktop app with GPT-5.6 Sol or Terra, or use WebMCP-enabled Chrome.'}
       </p>
       <p className="rail-agent__prompt">
-        <strong>Try:</strong> “Show me warming over time.” · “Who emits the most?” ·
-        “When was the hottest year?” · “Play the century as sound.”
+        Try, by voice or through your agent:
+        <br />
+        <strong>“Show me warming over time.”</strong>
+        <br />
+        <strong>“Who emits the most?”</strong>
+        <br />
+        <strong>“When was the hottest year?”</strong>
+        <br />
+        <strong>“Play the century as sound.”</strong>
       </p>
     </div>
   )
@@ -194,19 +179,22 @@ export function Rail() {
 
   return (
     <aside className="rail" aria-label="Conversation and tool activity">
-      <h2 className="rail__heading">Conversation</h2>
+      <h2 className="sr-only">Conversation</h2>
 
-      <SiteToolsGuide />
-
-      <DirectAsk onStatus={setLocalStatus} />
-
-      {question && (
-        <div className="rail-q">
-          <MicIcon stroke="#e8c778" />
-          <p className="rail-q__text">“{question}”</p>
-        </div>
+      {/* The question as a Newsreader-italic pull-quote; a blinking-caret
+          waiting line before anything has been asked. */}
+      {question ? (
+        <p className="rail-quote">“{question}”</p>
+      ) : (
+        <p className="rail-quote rail-quote--waiting">
+          Ask the planet something.
+          <span className="rail-caret" aria-hidden="true">
+            ▎
+          </span>
+        </p>
       )}
 
+      {/* The latest agent-facing answer as body text, a thin rule above. */}
       <div className="rail-a" role="status" aria-live="polite" aria-atomic="true">
         {latestAnswer ? (
           <p className="rail-a__text">{latestAnswer}</p>
@@ -214,12 +202,16 @@ export function Rail() {
           <p className="rail-a__text">{localStatus}</p>
         ) : (
           <p className="rail-a__text rail-a__text--empty">
-            Ask the planet something. No views yet — every chart that appears here
-            will exist because you asked for it.
+            No views yet — every chart that appears here will exist because you
+            asked for it.
           </p>
         )}
         {sonifyMs > 0 && <SonifyBar seconds={Math.round(sonifyMs / 100) / 10} />}
       </div>
+
+      <DirectAsk onStatus={setLocalStatus} />
+
+      <SiteToolsGuide />
 
       <div className="rail-log">
         <h2 className="rail__heading rail__heading--sub">Tool calls · in plain words</h2>
@@ -241,23 +233,11 @@ export function Rail() {
       </div>
 
       <div className="rail-credo">
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="var(--ink)"
-          strokeWidth="2"
-          strokeLinecap="round"
-          aria-hidden="true"
-          className="rail-credo__icon"
-        >
-          <path d="M12 3 4 6v6c0 4.4 3.4 8 8 9 4.6-1 8-4.6 8-9V6l-8-3z" />
-        </svg>
         <p className="rail-credo__text">
           Every answer comes from the page’s <strong>own data model</strong> — never a
           screenshot guess.
         </p>
+        <p className="rail-credo__sources">Data: NASA GISTEMP · NOAA · Our World in Data</p>
       </div>
     </aside>
   )

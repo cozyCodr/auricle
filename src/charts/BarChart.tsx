@@ -66,8 +66,9 @@ export function BarChart({
               y={y}
               width={bw}
               height={Math.max(0, h)}
-              rx={hero ? 4 : 3}
+              rx={0}
               className={`barchart__bar${d.emphasis ? ' barchart__bar--emphasis' : ''}`}
+              style={{ animationDelay: `${(0.15 + i * 0.06).toFixed(2)}s` }}
             />
             {hero && (
               <text x={x + bw / 2} y={plotB + 20} className="barchart__cat" textAnchor="middle">
@@ -135,7 +136,7 @@ export function BarChart({
                 y={by + (hero ? 33 : 27)}
                 fontFamily="var(--font-body)"
                 fontSize={hero ? 12 : 10}
-                fill="#e8c778"
+                fill="#f4a582"
               >
                 {emphasisDetail}
               </text>

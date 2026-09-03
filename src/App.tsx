@@ -16,6 +16,8 @@ import { startLiveFeed, subscribeLiveFeed } from './dashboard/liveFeed'
 import { ChartCard, useChartHighlight, DataTable, tableFor, rowCountFor, TOTAL_ROWS } from './charts'
 import { Rail } from './rail/Rail'
 import { subscribeAudio, isAudioReady, armAudio } from './sonify'
+import { tempLine } from './charts/data.ts'
+import { stripeColor } from './charts/StripesChart.tsx'
 import { createVoice, isVoiceSupported, type VoiceState } from './voice'
 import { setQuestion } from './rail/conversation'
 import { isIntentExecutionAvailable, runIntent } from './voice/intents'
@@ -35,34 +37,13 @@ function EnableSoundButton() {
   return (
     <button
       type="button"
-      className={`app-header__sound${ready ? ' app-header__sound--on' : ''}`}
+      className={`masthead__control masthead__sound${ready ? ' masthead__sound--on' : ''}`}
       aria-pressed={ready}
       onClick={() => void armAudio()}
       title={ready ? 'Audio is enabled — ask an agent to play a chart as sound' : 'Enable audio so charts can be played as sound'}
     >
-      {ready ? (
-        <>
-          <span aria-hidden="true">♪</span> Sound on
-        </>
-      ) : (
-        <>
-          <span aria-hidden="true">♪</span> Enable sound
-        </>
-      )}
+      {ready ? 'Sound on' : 'Enable sound'}
     </button>
-  )
-}
-
-/** Five decorative level bars; they animate only while listening (CSS-driven). */
-function LevelBars() {
-  return (
-    <span className="app-header__bars" aria-hidden="true">
-      <span />
-      <span />
-      <span />
-      <span />
-      <span />
-    </span>
   )
 }
 
@@ -115,33 +96,57 @@ function VoiceMic() {
     : 'Push to talk: click to start, click to stop. Your question appears in the conversation.'
 
   return (
-    <button
-      type="button"
-      className={`app-header__status app-header__voice${listening ? ' app-header__voice--active' : ''}${denied ? ' app-header__voice--denied' : ''}`}
-      aria-pressed={listening}
-      aria-label={aria}
-      title={title}
-      onClick={() => voice.current?.toggle()}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke={listening ? 'var(--red-accent)' : 'currentColor'}
-        strokeWidth="2"
-        strokeLinecap="round"
-        aria-hidden="true"
-      >
-        <rect x="9" y="3" width="6" height="11" rx="3" />
-        <path d="M5 11a7 7 0 0 0 14 0" />
-        <path d="M12 18v3" />
-      </svg>
-      <span className="app-header__status-label">
-        {listening && interim ? interim : label}
+    <>
+      <span className="masthead__sep" aria-hidden="true">
+        ·
       </span>
-      <LevelBars />
-    </button>
+      <button
+        type="button"
+        className={`masthead__control masthead__voice${listening ? ' masthead__voice--active' : ''}${denied ? ' masthead__voice--denied' : ''}`}
+        aria-pressed={listening}
+        aria-label={aria}
+        title={title}
+        onClick={() => voice.current?.toggle()}
+      >
+        {listening && <span className="masthead__live-square" aria-hidden="true" />}
+        <span className="masthead__control-label">
+          {listening && interim ? interim : label}
+        </span>
+      </button>
+    </>
+  )
+}
+
+/**
+ * The stripes identity band — DECORATIVE identity art, computed from the REAL
+ * NASA GISTEMP anomaly series: the yearly values are bucketed to ~40 columns
+ * and each bucket's mean anomaly is mapped through the SAME blue→white→red
+ * ramp the queryable StripesChart uses (`stripeColor`). It is aria-hidden
+ * because it is the masthead's identity art, not a chart an agent can query —
+ * the QUERYABLE stripes are the commissioned StripesChart view.
+ */
+const STRIPE_BAND: readonly string[] = (() => {
+  const bucket = Math.max(1, Math.ceil(tempLine.length / 40))
+  const means: number[] = []
+  for (let i = 0; i < tempLine.length; i += bucket) {
+    const slice = tempLine.slice(i, i + bucket)
+    means.push(slice.reduce((sum, p) => sum + p.y, 0) / slice.length)
+  }
+  const min = Math.min(...means)
+  const max = Math.max(...means)
+  return means.map((v) => stripeColor(v, min, max))
+})()
+
+function StripesBand() {
+  return (
+    <div className="stripes-band" aria-hidden="true">
+      {STRIPE_BAND.map((color, i) => (
+        <span
+          key={i}
+          style={{ background: color, animationDelay: `${(0.02 + i * 0.028).toFixed(3)}s` }}
+        />
+      ))}
+    </div>
   )
 }
 
@@ -173,7 +178,12 @@ function ShelfDataset({ chartId }: { chartId: string }) {
         <span className="shelf__dataset-title">{chart.title}</span>
         <span className="shelf__dataset-meta">
           {' '}· {chart.source.split('—')[0].trim()} · {rowCountFor(chartId)} rows
-          {live ? ' · live' : ''}
+          {live && (
+            <>
+              {' · '}
+              <span className="shelf__dataset-meta--live">live</span>
+            </>
+          )}
         </span>
       </button>
       <DataTable model={model} />
@@ -286,35 +296,18 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        {/* Shield / ear mark */}
-        <svg
-          className="app-header__mark"
-          width="30"
-          height="30"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.9"
-          strokeLinecap="round"
-          role="img"
-          aria-label="Auricle"
-        >
-          <path d="M6 20a4 4 0 0 1-2-3.5C4 10 7 4 12 4s8 6 8 12.5A4 4 0 0 1 18 20" />
-          <path d="M9 20v-4a3 3 0 0 1 6 0v4" />
-        </svg>
-
-        <div className="app-header__titles">
-          <div className="app-header__name">Auricle</div>
-          <div className="app-header__tagline">interview the planet</div>
+      <header className="masthead">
+        <div className="masthead__name">Auricle</div>
+        <div className="masthead__tagline">interview the planet</div>
+        <div className="masthead__controls">
+          <EnableSoundButton />
+          <VoiceMic />
         </div>
-
-        <div className="app-header__note">climate · four real open datasets</div>
-
-        <VoiceMic />
-
-        <EnableSoundButton />
       </header>
+
+      {/* Identity art from the real anomaly data, above the 2px ink rule. */}
+      <StripesBand />
+      <div className="masthead__rule" aria-hidden="true" />
 
       <main className="app-main">
         <h1 className="sr-only">Auricle — the climate dashboard you can interview</h1>

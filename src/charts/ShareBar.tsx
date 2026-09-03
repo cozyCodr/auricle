@@ -26,8 +26,8 @@ const HERO = { w: 980, h: 250, side: 14, barY: 34, barH: 58, legendY: 128, legen
 const SMALL = { w: 280, h: 116, side: 8, barY: 18, barH: 40, legendY: 78, legendRowH: 14 }
 
 /** The single data hue, stepped toward a pale tint by rank (never a rainbow). */
-const BASE_HUE = '#2f5fa3'
-const PALE_TINT = '#dde5f1'
+const BASE_HUE = '#2166ac'
+const PALE_TINT = '#d1e5f0'
 
 function segmentColor(i: number, count: number): string {
   const t = count > 1 ? i / (count - 1) : 0
@@ -73,9 +73,18 @@ export function ShareBar({
       role="img"
       aria-label={ariaLabel}
     >
-      {/* The 100% bar */}
-      {rects.map((r) => (
-        <rect key={r.seg.label} x={r.x} y={box.barY} width={r.w} height={box.barH} fill={r.color}>
+      {/* The 100% bar — segments grow left-to-right on mount (CSS sharebar__seg). */}
+      {rects.map((r, i) => (
+        <rect
+          key={r.seg.label}
+          className="sharebar__seg"
+          style={{ animationDelay: `${(0.15 + i * 0.07).toFixed(2)}s` }}
+          x={r.x}
+          y={box.barY}
+          width={r.w}
+          height={box.barH}
+          fill={r.color}
+        >
           <title>{`${r.seg.label}: ${pct(r.seg.share)}`}</title>
         </rect>
       ))}
@@ -135,7 +144,7 @@ export function ShareBar({
         const bx = Math.min(Math.max(plotL, cx - tw / 2), plotR - tw)
         const by = Math.max(2, box.barY - th - 8)
         return (
-          <g>
+          <g className="chart-tip">
             <rect
               x={hit.x - 2}
               y={box.barY - 2}
@@ -163,7 +172,7 @@ export function ShareBar({
                 y={by + (hero ? 33 : 27)}
                 fontFamily="var(--font-body)"
                 fontSize={hero ? 12 : 10}
-                fill="#e8c778"
+                fill="#f4a582"
               >
                 {emphasisDetail}
               </text>

@@ -1,24 +1,26 @@
 /* Auricle — global stylesheet
    Design tokens (custom properties) + base document styles.
-   High-contrast, hyperlegible. Single data hue, warm paper background. */
+   Editorial "warming stripes" direction: white page, ink text, hairline rules,
+   one deep-red accent. Serif (Newsreader) display + Archivo UI + mono figures. */
 
 :root {
-  /* Palette */
-  --bg: #fdfcf8;              /* page background */
-  --ink: #1a1a1a;            /* primary text / 2px borders */
-  --muted: #55524c;         /* secondary text */
-  --faint: #6f6b62;         /* captions — deliberately darkened for contrast */
-  --data-blue: #2f5fa3;     /* single data hue */
-  --gold-band: rgba(214, 154, 30, 0.18); /* highlight fill */
-  --gold-ink: #8a5a00;      /* highlight text / accents */
-  --red-accent: #8a1c0f;    /* live indicator */
+  /* Palette — token NAMES are stable; values retargeted for the editorial direction. */
+  --bg: #ffffff;              /* page background */
+  --ink: #111111;            /* primary text / 2px rules */
+  --muted: #555555;         /* secondary text (7.5:1 on white) */
+  --faint: #6b6b6b;         /* captions — kept ≥4.8:1 on white */
+  --data-blue: #2166ac;     /* single data hue (stripes deep blue) */
+  --gold-band: rgba(178, 24, 43, 0.14); /* highlight band fill (deep-red family) */
+  --gold-ink: #8a1c0f;      /* highlight text / accents (deep red) */
+  --red-accent: #8a1c0f;    /* live indicator / emphasis */
   --surface: #ffffff;       /* card surfaces */
-  --surface-alt: #f7f4ec;   /* rail surface */
-  --border-soft: #d8d4c8;
+  --surface-alt: #fafaf8;   /* rail surface */
+  --border-soft: #dcdcdc;   /* hairlines */
 
   /* Type */
-  --font-body: 'Atkinson Hyperlegible', system-ui, sans-serif;
-  --font-mono: 'Spline Sans Mono', ui-monospace, monospace;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-body: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'Spline Sans Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
   color-scheme: light;
   color: var(--ink);
@@ -46,6 +48,8 @@ body {
   min-height: 100svh;
   background: var(--bg);
   color: var(--ink);
+  /* Editorial layout: wide content scrolls inside its own container, never the body. */
+  overflow-x: hidden;
 }
 
 #root {
@@ -58,5 +62,5 @@ a {
   color: var(--gold-ink);
 }
 a:hover {
-  color: #6b4600;
+  color: #5e1309;
 }
