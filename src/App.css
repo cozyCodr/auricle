@@ -740,6 +740,68 @@ button.app-header__voice {
   color: var(--data-blue);
 }
 
+/* Typed WebMCP rehearsal — unlike the old display-only form, this executes tools. */
+.rail-ask {
+  display: grid;
+  gap: 7px;
+}
+
+.rail-ask__label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rail-ask__row {
+  display: flex;
+  gap: 8px;
+}
+
+.rail-ask__input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.rail-ask__input:focus-visible,
+.rail-ask__button:focus-visible {
+  outline: 3px solid var(--data-blue);
+  outline-offset: 2px;
+}
+
+.rail-ask__button {
+  padding: 0 15px;
+  border: 1px solid var(--ink);
+  border-radius: 9px;
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rail-ask__button:disabled,
+.rail-ask__input:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rail-ask__hint {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 /* Question bubble (dark, italic) */
 .rail-q {
   display: flex;

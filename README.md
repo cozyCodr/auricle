@@ -77,9 +77,10 @@ reports that Site Tools are unavailable. Interviewing the page requires a WebMCP
    built-in browser using GPT-5.6 Sol or Terra. Ask Codex in the conversation beside the browser
    to describe the screen, focus a chart, find the peak, or play it as sound. Codex calls the
    tools registered by the page. The page itself is intentionally not a chatbot.
-2. **Chrome WebMCP rehearsal.** In WebMCP-enabled Chrome, the optional *Ask by voice* control uses
-   Web Speech plus Chrome's imperative testing API. Its small rehearsed-phrase matcher drives the
-   same registered tools for demo and QA; it is not presented as general natural-language AI.
+2. **Direct WebMCP rehearsal.** When the host exposes WebMCP's imperative execution API, the
+   on-page *Ask Auricle directly* form and optional *Ask by voice* control drive the same registered
+   tools. Their small rehearsed-phrase matcher makes demos deterministic; it is not presented as
+   general natural-language AI.
 
 ## Run it locally
 
@@ -101,6 +102,9 @@ Terra, open Auricle in the built-in browser, and ask Codex about the page.
    [Model Context Tool Inspector](https://chromewebstore.google.com/) extension.
 
 Click **♪ Enable sound** once (browsers only start audio from a gesture) to hear the sonifier.
+
+The production build is deployed on **Vercel** from `main` at
+[auricle-khaki.vercel.app](https://auricle-khaki.vercel.app).
 
 ## Data & sources
 

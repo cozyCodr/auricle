@@ -3,8 +3,9 @@
  *
  * Top → bottom, matching the mockup:
  *   1. "Conversation" heading + truthful Site Tools availability and guidance.
- *   2. The latest question as a dark bubble (italic), when one has been asked.
- *   3. The latest agent-facing answer as a light bubble — the `speech` of the
+ *   2. A functional typed rehearsal that executes the registered WebMCP tools.
+ *   3. The latest question as a dark bubble (italic), when one has been asked.
+ *   4. The latest agent-facing answer as a light bubble — the `speech` of the
  *      most recent tool-log entry (an empty-state line before any tool runs).
  *   4. "Tool calls · in plain words" — the executed-tool log, newest first,
  *      each line `argsSummary → speech`. This list is an ARIA live region so a
@@ -17,10 +18,11 @@
  * duration (a static "playing…" label under reduced-motion).
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useAgentAvailable, useMirror, useToolLog } from '../lib/agent-a11y'
 import type { LogEntry } from '../lib/agent-a11y'
-import { useQuestion } from './conversation.ts'
+import { isIntentExecutionAvailable, runIntent, type RunResult } from '../voice/intents.ts'
+import { setQuestion, useQuestion } from './conversation.ts'
 
 /** Small microphone glyph, reused in the header/question bubble. */
 function MicIcon({ stroke, size = 15 }: { stroke: string; size?: number }) {
@@ -61,6 +63,75 @@ function SiteToolsGuide() {
         <strong>Try:</strong> “When did maize prices peak?”
       </p>
     </div>
+  )
+}
+
+function failureMessage(failure: RunResult['failure']): string {
+  if (failure === 'unmatched') {
+    return 'Try “When did maize prices peak?”, “How much did it rise from 2022?”, “Compare countries”, or “Play it as sound”.'
+  }
+  if (failure === 'tool-not-found') {
+    return 'That chart tool is not registered yet. Focus its chart and try again.'
+  }
+  return 'Direct Ask needs WebMCP execution support. Use the latest ChatGPT desktop browser or WebMCP-enabled Chrome.'
+}
+
+/** Deterministic demo fallback that still runs the page's real WebMCP tools. */
+function DirectAsk({
+  enabled,
+  onStatus,
+}: {
+  enabled: boolean
+  onStatus(message: string | null): void
+}) {
+  const inputId = useId()
+  const [draft, setDraft] = useState('')
+  const [running, setRunning] = useState(false)
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    const text = draft.trim()
+    if (!text || running || !enabled) return
+    setQuestion(text)
+    onStatus(null)
+    setRunning(true)
+    try {
+      const result = await runIntent(text)
+      if (!result.executed) onStatus(failureMessage(result.failure))
+      else setDraft('')
+    } catch {
+      onStatus('The WebMCP tool failed unexpectedly. Please try the prompt again.')
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  return (
+    <form className="rail-ask" onSubmit={(event) => void submit(event)}>
+      <label htmlFor={inputId} className="rail-ask__label">
+        Ask Auricle directly
+      </label>
+      <div className="rail-ask__row">
+        <input
+          id={inputId}
+          className="rail-ask__input"
+          type="text"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          placeholder="When did maize prices peak?"
+          autoComplete="off"
+          disabled={!enabled || running}
+        />
+        <button className="rail-ask__button" type="submit" disabled={!enabled || running || !draft.trim()}>
+          {running ? 'Running…' : 'Ask'}
+        </button>
+      </div>
+      <p className="rail-ask__hint">
+        {enabled
+          ? 'Reliable demo fallback · executes the same registered WebMCP tools.'
+          : 'Available when this browser exposes WebMCP execution.'}
+      </p>
+    </form>
   )
 }
 
@@ -109,6 +180,8 @@ function SonifyBar({ seconds }: { seconds: number }) {
 export function Rail() {
   const log = useToolLog()
   const question = useQuestion()
+  const directAskEnabled = useMemo(() => isIntentExecutionAvailable(), [])
+  const [localStatus, setLocalStatus] = useState<string | null>(null)
   // Newest-first for display (the store is oldest→newest).
   const newestFirst = [...log].slice().reverse()
   const latestAnswer = newestFirst[0]?.speech ?? ''
@@ -133,6 +206,8 @@ export function Rail() {
 
       <SiteToolsGuide />
 
+      <DirectAsk enabled={directAskEnabled} onStatus={setLocalStatus} />
+
       {question && (
         <div className="rail-q">
           <MicIcon stroke="#e8c778" />
@@ -143,6 +218,8 @@ export function Rail() {
       <div className="rail-a" role="status" aria-live="polite" aria-atomic="true">
         {latestAnswer ? (
           <p className="rail-a__text">{latestAnswer}</p>
+        ) : localStatus ? (
+          <p className="rail-a__text">{localStatus}</p>
         ) : (
           <p className="rail-a__text rail-a__text--empty">
             Waiting for your browser agent to call an Auricle tool.
