@@ -324,16 +324,27 @@ export async function runLocalIntent(transcript: string): Promise<RunResult> {
 }
 
 // --- Dev/test hook ----------------------------------------------------------
-// Exposes `runIntent` on `window.__auricleRunIntent` so the integrating agent
-// can drive the loop from the browser console WITHOUT real speech, e.g.
+// The SILENT console hook — with no on-page form, this is the only human
+// entry to the workbench (a demo/QA affordance, not a product surface):
 //   await window.__auricleRunIntent('when was the hottest year')
-// Guarded to the browser; harmless in Node/tests. Genuinely useful for the
-// demo and for QA in a WebMCP-flagged Chrome, so it is intentionally left in.
+// It prefers the agent-identical path (`document.modelContext.executeTool`) in
+// a WebMCP host and falls back to the registry's local execution — the SAME
+// registered ToolDef handlers, mirror bus, and log — in a plain browser.
+// Guarded to the browser; harmless in Node/tests. Intentionally left in.
 declare global {
   interface Window {
     __auricleRunIntent?: (transcript: string) => Promise<RunResult>
   }
 }
 if (typeof window !== 'undefined') {
-  window.__auricleRunIntent = runIntent
+  window.__auricleRunIntent = async (transcript: string) => {
+    const viaHost = await runIntent(transcript)
+    if (
+      !viaHost.executed &&
+      (viaHost.failure === 'webmcp-unavailable' || viaHost.failure === 'execute-unsupported')
+    ) {
+      return runLocalIntent(transcript)
+    }
+    return viaHost
+  }
 }

@@ -23,28 +23,32 @@ the run time; historical values are stable).
   in the late 1970s and accelerates to a record **+1.28 °C in 2024** (2025:
   +1.19). Incomplete years (`***` in the CSV) are omitted, never estimated.
 
-## 2. `co2-emitters.json` — global line + latest-year bars
+## 2. `co2-emitters.json` — global line + ten deep country series
 
 - **Source:** Our World in Data — Annual CO₂ emissions (Global Carbon Budget),
   via the small filtered grapher CSV (not the ~60 MB full dump).
 - **What it shows:** (a) `global_series` — world fossil CO₂ in **million
-  tonnes/year**, 1850 → 2024 (175 years); (b) `emitters_latest` — the six
-  biggest emitting economies' latest-year totals.
+  tonnes/year**, 1850 → 2024 (175 years); (b) `country_series` — the **full
+  annual series for the ten biggest emitting economies** (1,465 country-year
+  rows; 1,640 rows including the world series); (c) `emitters_latest` — those
+  ten economies' latest-year totals, ranked.
 - **The story (real):** the world emitted a record **38,599 Mt in 2024**;
   **China leads at 12,289 Mt** — more than the US (4,904) and India (3,193)
-  combined. EU-27 2,426, Russia 1,781, Japan 962.
+  combined. EU-27 2,426, Russia 1,781, Japan 962, Indonesia 812, Iran 793,
+  Saudi Arabia 692, Germany 572. (EU-27 is a bloc, so Germany appears both
+  alone and inside it — additive views must not double-count.)
 
 ## 3. `wealth-carbon.json` — scatter
 
 - **Source:** Our World in Data — CO₂ per capita vs GDP per capita
   (Global Carbon Budget; Maddison Project).
 - **What it shows:** `points: [{ country, code, x: GDP/capita (intl-$),
-  y: t CO₂/capita }]` for **26 countries across income levels in 2022** (the
-  latest year both series exist). Country *selection* is editorial; every
-  value is fetched.
-- **The story (real):** wealth and carbon correlate at **r≈0.65** — from
-  Ethiopia ($2,289, 0.14 t) to the US (14.8 t); yet Norway, the richest at
-  $88,366, emits 7.5 t, so income is not destiny.
+  y: t CO₂/capita }]` for **every country with both series in 2022** (the
+  latest such year) — **164 countries**, no editorial selection; every value
+  is fetched.
+- **The story (real):** wealth and carbon correlate at **r≈0.78** — from the
+  DR Congo ($844, 0.06 t) to Qatar ($149,171, 37.9 t); yet Malta, in the
+  richest quarter, emits only 3.4 t, so income is not destiny.
 
 ## 4. `co2-live.json` — live feed baseline
 

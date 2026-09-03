@@ -111,17 +111,18 @@ function sonifyTool(chartId: string, spec: SonifySpec): ToolDef {
   return {
     name: `${chartId}_sonify`,
     description:
-      'Play this chart as sound — a ~3-second tone sweep where pitch rises with the ' +
-      'value (220–880 Hz), with a louder octave ping at the series peak so you can ' +
-      'hear where the maximum lands. Needs on-page audio to be enabled first. Ask ' +
-      'describe_trend to hear the same shape in words.',
+      'Play this series as sound for your user — a ~3-second tone sweep where pitch ' +
+      'rises with the value (220–880 Hz), with a louder octave ping at the series peak ' +
+      'so they hear where the maximum lands. Needs on-page audio enabled first (the ' +
+      '"Enable sound" control in the page footer). Ask describe_trend to hear the same ' +
+      'shape in words.',
     inputSchema: { type: 'object', properties: {} },
     argsSummary: () => `${chartId}_sonify()`,
     execute: () => {
       if (!isAudioReady()) {
         return {
           speech:
-            'Press the "Enable sound" button on the page first (browsers only start ' +
+            'Press "Enable sound" in the page footer first (browsers only start ' +
             'audio from a click), then ask me to play it as sound.',
           data: { ok: false, needsAudio: true, chartId },
         }
@@ -155,9 +156,11 @@ function tempFamily(): ToolDef[] {
     {
       name: 'temp-anomaly_query_point',
       description:
-        'Look up the global temperature anomaly for one year (e.g. 1998). Returns the ' +
-        'nearest annual reading in °C vs the 1951–1980 average and whether it is the ' +
-        'record. Try find_extremes for the record year, or query_range for a change.',
+        'Look up the global temperature anomaly for one year (e.g. 1998) for your user — ' +
+        'computed from the page’s own data, and the answer is drawn onto the chart as a ' +
+        'glowing point. Returns the nearest annual reading in °C vs the 1951–1980 average ' +
+        'and whether it is the record. Try find_extremes for the record year, or ' +
+        'query_range for a change.',
       inputSchema: {
         type: 'object',
         properties: { year: { type: 'number', description: 'Calendar year, e.g. 1998.' } },
@@ -190,9 +193,11 @@ function tempFamily(): ToolDef[] {
     {
       name: 'temp-anomaly_query_range',
       description:
-        'Compare the temperature anomaly across a year range (start, end). Returns ' +
-        'start/end anomalies, the change in °C, and the min & max within the window. ' +
-        'Ask find_extremes for the record, or describe_trend for the full story.',
+        'Compute how much the world warmed across a year range (start, end) for your ' +
+        'user — from the page’s own data, with the answer drawn onto the chart as a ' +
+        'highlighted band. Returns start/end anomalies, the change in °C, and the min & ' +
+        'max within the window. Ask find_extremes for the record, or describe_trend for ' +
+        'the full story.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -239,9 +244,10 @@ function tempFamily(): ToolDef[] {
     {
       name: 'temp-anomaly_find_extremes',
       description:
-        'Find the coldest and warmest years over the whole record or an optional year ' +
-        'window (start/end). Returns both with their anomalies. Ask query_range for a ' +
-        'specific change, or describe_trend for the full arc.',
+        'Find the coldest and warmest years for your user, over the whole record or an ' +
+        'optional window (start/end) — computed from the page’s own data; the record ' +
+        'year lights up on the chart. Returns both with their anomalies. Ask query_range ' +
+        'for a specific change, or describe_trend for the full arc.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -277,9 +283,10 @@ function tempFamily(): ToolDef[] {
     {
       name: describeTrendToolName('temp-anomaly'),
       description:
-        'Narrate the full shape of the warming curve: the 19th-century baseline, the ' +
-        'late-1970s zero crossing, the acceleration, and the record. Then ask ' +
-        'query_point, query_range, or find_extremes to drill in.',
+        'Narrate the full shape of the warming curve for your user — the 19th-century ' +
+        'baseline, the late-1970s zero crossing, the acceleration, and the record — ' +
+        'computed from the page’s own data, with the whole span highlighted on the ' +
+        'chart. Then ask query_point, query_range, or find_extremes to drill in.',
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'temp-anomaly_describe_trend()',
       execute: () => {
@@ -321,9 +328,10 @@ function emittersFamily(): ToolDef[] {
     {
       name: 'co2-emitters_query_point',
       description:
-        'Look up global fossil CO₂ emissions for one year. Returns million tonnes for ' +
-        'the nearest year. Ask compare_emitters for who emits the most today, or ' +
-        'describe_trend for the full rise.',
+        'Look up global fossil CO₂ emissions for one year for your user — computed from ' +
+        'the page’s own data, and drawn onto the chart as a glowing point. Returns ' +
+        'million tonnes for the nearest year. Ask compare_emitters for who emits the ' +
+        'most today, or describe_trend for the full rise.',
       inputSchema: {
         type: 'object',
         properties: { year: { type: 'number', description: 'Calendar year, e.g. 1990.' } },
@@ -350,8 +358,9 @@ function emittersFamily(): ToolDef[] {
     {
       name: 'co2-emitters_query_range',
       description:
-        'Compare global CO₂ emissions across a year range (start, end). Returns ' +
-        'start/end totals, the multiple, and min & max within the window. Ask ' +
+        'Compute how global CO₂ emissions changed across a year range (start, end) for ' +
+        'your user — from the page’s own data, with the window highlighted on the chart. ' +
+        'Returns start/end totals, the multiple, and min & max within the window. Ask ' +
         'compare_emitters for the country ranking.',
       inputSchema: {
         type: 'object',
@@ -397,9 +406,10 @@ function emittersFamily(): ToolDef[] {
     {
       name: 'co2-emitters_find_extremes',
       description:
-        'Find the lowest and highest global emission years over the whole series or an ' +
-        'optional window (start/end years). The high is the most recent year — emissions ' +
-        'are still setting records. Ask describe_trend for the arc.',
+        'Find the lowest and highest global emission years for your user, over the whole ' +
+        'series or an optional window (start/end years) — computed from the page’s own ' +
+        'data; the peak lights up on the chart. The high is the most recent year — ' +
+        'emissions are still setting records. Ask describe_trend for the arc.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -435,9 +445,10 @@ function emittersFamily(): ToolDef[] {
     {
       name: describeTrendToolName('co2-emitters'),
       description:
-        'Narrate the global CO₂ emissions curve — the industrial rise, the acceleration, ' +
-        'and the still-standing record. Ask compare_emitters for who emits it, or ' +
-        'query_range for any window.',
+        'Narrate the global CO₂ emissions curve for your user — the industrial rise, the ' +
+        'acceleration, and the still-standing record — computed from the page’s own ' +
+        'data, with the whole span highlighted on the chart. Ask compare_emitters for ' +
+        'who emits it, or query_range for any window.',
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'co2-emitters_describe_trend()',
       execute: () => {
@@ -457,9 +468,10 @@ function emittersFamily(): ToolDef[] {
     {
       name: 'co2-emitters_compare_emitters',
       description:
-        `Rank the six biggest emitting economies by latest-year fossil CO₂ (${SRC.emitters}) ` +
-        'and say how far ahead the leader is. Emphasises the top bar. Ask describe_trend ' +
-        'for the global time story.',
+        `Rank the ten biggest emitting economies by latest-year fossil CO₂ for your user ` +
+        `(${SRC.emitters}) and say how far ahead the leader is — computed from the page’s ` +
+        'own data; the top bar is ringed on the chart. Ask describe_trend for the global ' +
+        'time story.',
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'co2-emitters_compare_emitters()',
       execute: () => {
@@ -470,7 +482,7 @@ function emittersFamily(): ToolDef[] {
         const vsNextTwo = top.value > second.value + third.value ? ' — more than the next two combined' : ''
         const speech =
           `${top.country} emits the most: ${fmtInt(top.value)} Mt of CO₂ in ${top.year}${vsNextTwo}. ` +
-          `The ranking (Mt): ${list} (${SRC.emitters}). ` +
+          `The ranking (Mt): ${list} (${SRC.emitters}; EU-27 is a bloc — Germany also appears within it). ` +
           'Ask describe_trend for how the global total got here.'
         return {
           speech,
@@ -495,15 +507,20 @@ function wealthFamily(): ToolDef[] {
   const r = pearson(pts.map((p) => p.x), pts.map((p) => p.y))
   const topCo2 = maxBy(pts, (p) => p.y)
   const lowCo2 = minBy(pts, (p) => p.y)
-  const topGdp = maxBy(pts, (p) => p.x)
+  // The computed counter-example: among the richest QUARTER of countries, the
+  // one emitting the least — proof that income does not fully dictate carbon.
+  const gdpSorted = [...pts].sort((a, b) => b.x - a.x)
+  const richQuarter = gdpSorted.slice(0, Math.max(3, Math.floor(pts.length / 4)))
+  const cleanRich = minBy(richQuarter, (p) => p.y)
 
   return [
     {
       name: 'wealth-carbon_describe_relationship',
       description:
-        'Compute and explain the wealth→carbon relationship: the Pearson correlation ' +
-        `between GDP per capita and CO₂ per capita across ${pts.length} countries, with the ` +
-        'countries that break the pattern. Ask query_nearest for a specific country.',
+        'Compute and explain the wealth→carbon relationship for your user: the Pearson ' +
+        `correlation between GDP per capita and CO₂ per capita across ${pts.length} countries ` +
+        '— computed from the page’s own data, with the answer ringed on the scatter — ' +
+        'plus the countries that break the pattern. Ask query_nearest for a specific country.',
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'wealth-carbon_describe_relationship()',
       execute: () => {
@@ -511,8 +528,9 @@ function wealthFamily(): ToolDef[] {
           `Across ${pts.length} countries in ${wealthCarbon.year}, wealth and carbon are strongly linked: ` +
           `Pearson r≈${round(r, 2)} between GDP per capita and CO₂ per capita. The spread runs ` +
           `${round(lowCo2.y, 2)} t/person (${lowCo2.country}) to ${round(topCo2.y, 1)} t (${topCo2.country}) — ` +
-          `yet ${topGdp.country}, the richest at $${fmtInt(topGdp.x)}, emits ${round(topGdp.y, 1)} t, so income is ` +
-          `not destiny (${SRC.wealth}). Ask query_nearest for any single country.`
+          `yet ${cleanRich.country}, in the richest quarter at $${fmtInt(cleanRich.x)}, emits only ` +
+          `${round(cleanRich.y, 1)} t, so income is not destiny (${SRC.wealth}). ` +
+          'Ask query_nearest for any single country.'
         return {
           speech,
           data: { ok: true, r: Number(round(r, 2)), year: wealthCarbon.year, countries: pts.length },
@@ -523,9 +541,10 @@ function wealthFamily(): ToolDef[] {
     {
       name: 'wealth-carbon_query_nearest',
       description:
-        'Return the GDP-per-capita / CO₂-per-capita point for a country (by name), or ' +
-        'the nearest country to a given GDP (x, $) or emissions (y, t/person). Rings ' +
-        'that dot. Ask describe_relationship for the overall correlation.',
+        'Return the GDP-per-capita / CO₂-per-capita point for a country (by name) for ' +
+        'your user, or the nearest country to a given GDP (x, $) or emissions ' +
+        '(y, t/person) — from the page’s own data; the matching dot is ringed on the ' +
+        'scatter. Ask describe_relationship for the overall correlation.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -596,9 +615,9 @@ function liveFamily(): ToolDef[] {
     {
       name: 'co2-live_current_value',
       description:
-        `Get the live CO₂ concentration at Mauna Loa — last tick ${round(ppm, 2)} ppm ` +
-        '(simulated feed seeded from the real latest weekly mean, re-registered every tick). ' +
-        "Ask session_stats for this session's range.",
+        `Read the live CO₂ concentration at Mauna Loa for your user — last tick ${round(ppm, 2)} ppm ` +
+        '(simulated feed seeded from the real latest weekly mean, re-registered every tick); ' +
+        "the reading lights up on the live view. Ask session_stats for this session's range.",
       inputSchema: { type: 'object', properties: {} },
       argsSummary: () => 'co2-live_current_value()',
       execute: () => {

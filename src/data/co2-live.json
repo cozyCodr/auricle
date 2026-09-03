@@ -1,7 +1,7 @@
 {
   "source": "NOAA Global Monitoring Laboratory — Mauna Loa weekly mean CO₂",
   "source_url": "https://gml.noaa.gov/webdata/ccgg/trends/co2/co2_weekly_mlo.csv",
-  "fetched_at": "2026-09-03T12:08:43.860Z",
+  "fetched_at": "2026-09-03T13:20:48.184Z",
   "unit": "parts per million (ppm), weekly mean at Mauna Loa Observatory",
   "note": "The last 76 real weekly means (2025-03-02 to 2026-08-23), latest 426.94 ppm — versus ~280 ppm pre-industrial. The sawtooth is the Northern Hemisphere's breathing (May peak, September trough) on a relentless upward trend. The runtime replays tiny perturbations from the real latest value as a clearly-labelled simulated live feed.",
   "live_simulated": true,

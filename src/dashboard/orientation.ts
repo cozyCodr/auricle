@@ -39,9 +39,10 @@ import { rowCountFor, TOTAL_ROWS } from '../charts/data.ts'
 const EMPTY_OBJECT_SCHEMA = { type: 'object', properties: {} } as const
 
 const WHAT_IS_AURICLE =
-  'Auricle is a dashboard you can interview: four real climate datasets ' +
-  '(NASA, OWID, NOAA) that you query in plain language through WebMCP tools. ' +
-  'It starts as raw tables — every chart exists only because someone asked for it.'
+  'You’re on Auricle, a climate-data publication your user is reading: four real ' +
+  'datasets (NASA, OWID, NOAA) presented as deep tables. To you it is a workbench — ' +
+  'I can compute statistics from the page’s own data, draw new chart views onto the ' +
+  'canvas, highlight answers on the charts, and play any series as sound.'
 
 /** Human name for a dataset used in commissioning speech. */
 const VIEW_NICKNAME: Record<string, string> = {
@@ -59,26 +60,27 @@ function focusClause(): string {
   return `Focused view: ${chart ? chart.title : focused}.`
 }
 
-/** One-line shelf description of a dataset (id, source, real row count). */
+/** One-line publication description of a dataset (id, source, real row count). */
 function shelfLine(id: string): string {
   const c = getChart(id)!
-  return `• ${id} — ${c.title}, ${rowCountFor(id)} rows (${c.source}).`
+  return `• ${id} — ${c.title}, ${rowCountFor(id).toLocaleString('en-US')} rows (${c.source}).`
 }
 
 const describeScreen: ToolDef = {
   name: 'describe_screen',
   description:
-    'Start here. Describes what is on screen right now: on first load, the raw ' +
-    'data shelf (four real climate tables, no charts) and how to commission a ' +
-    'view; once views exist, each live view with its real headline figure. ' +
-    'Steers your next call (create_view on the shelf; a view’s tools after).',
+    'Start here. Auricle is a climate-data publication your user is reading. ' +
+    'Calling this tells you what’s on screen and everything you can do for them: ' +
+    'compute statistics from the page’s own data, draw new chart views onto the ' +
+    'canvas (9 kinds), highlight answers visually, and play any series as sound. ' +
+    'It also steers your next call (create_view first; a view’s tools after).',
   inputSchema: EMPTY_OBJECT_SCHEMA,
   execute: () => {
     const ws = getWorkspace()
     if (ws.length === 0) {
       const speech = [
         WHAT_IS_AURICLE,
-        `The screen shows the raw shelf: ${TOTAL_ROWS.toLocaleString('en-US')} rows across four tables. Zero answers.`,
+        `The page shows the publication: ${TOTAL_ROWS.toLocaleString('en-US')} rows across four tables. Zero answers.`,
         ...CHART_IDS.map(shelfLine),
         'No views yet. Ask create_view with a dataset id (e.g. create_view {"dataset":"temp-anomaly"}) and its chart plus its tool family will come online.',
       ].join(' ')
@@ -86,7 +88,7 @@ const describeScreen: ToolDef = {
         speech,
         data: {
           app: 'Auricle',
-          state: 'shelf',
+          state: 'publication',
           total_rows: TOTAL_ROWS,
           datasets: CHARTS.map((c) => ({ id: c.id, title: c.title, rows: rowCountFor(c.id), source: c.source, kind: c.kind })),
         },
@@ -99,7 +101,7 @@ const describeScreen: ToolDef = {
     })
     const remaining = CHART_IDS.filter((id) => !isCommissioned(id))
     const remainingNote = remaining.length
-      ? ` Still on the shelf, uncommissioned: ${remaining.join(', ')} — create_view brings any of them up.`
+      ? ` Still uncommissioned: ${remaining.join(', ')} — create_view draws any of them onto the canvas.`
       : ' Every dataset has been commissioned.'
     const speech = [
       WHAT_IS_AURICLE,
@@ -130,9 +132,10 @@ const describeScreen: ToolDef = {
 const listVisualizations: ToolDef = {
   name: 'list_visualizations',
   description:
-    'Lists the commissioned views (id, title, kind, focused or not, tool count) ' +
-    'and the datasets still waiting on the shelf. Use it to pick an id, then ' +
-    'create_view (shelf) or focus_chart (live view).',
+    'Lists the views you have drawn for your user (id, title, kind, focused or ' +
+    'not, tool count) and the datasets still uncommissioned in the publication. ' +
+    'Use it to pick an id, then create_view (uncommissioned) or focus_chart ' +
+    '(live view).',
   inputSchema: EMPTY_OBJECT_SCHEMA,
   execute: () => {
     const ids = getWorkspaceIds()
@@ -161,8 +164,8 @@ const listVisualizations: ToolDef = {
           .join('  |  ')
       : 'No views yet — the workspace is empty.'
     const shelfText = shelf.length
-      ? `On the shelf: ${shelf.map((r) => `${r.id} (${r.rows} rows, would render as ${r.kind})`).join(', ')}. Ask create_view to commission one.`
-      : 'Nothing left on the shelf.'
+      ? `Still uncommissioned: ${shelf.map((r) => `${r.id} (${r.rows.toLocaleString('en-US')} rows, would render as ${r.kind})`).join(', ')}. Ask create_view to draw one onto the canvas.`
+      : 'Every dataset is on the canvas.'
     return { speech: `${liveText}  ${shelfText}`, data: rows, mirror: { kind: 'list-visualizations' } }
   },
 }
@@ -173,11 +176,12 @@ const KIND_MENU = CHART_IDS.map((id) => `${id} [${(KIND_WHITELIST[id] ?? []).joi
 const createView: ToolDef = {
   name: 'create_view',
   description:
-    'Commission a view from a dataset: the chart appears in the workspace and its ' +
-    'tool family registers at that moment (it did not exist before). The SAME ' +
-    'dataset can be commissioned as multiple kinds at once (e.g. temp-anomaly as ' +
-    'a line AND as stripes) — idempotent per (dataset, kind) pair; re-asking an ' +
-    `existing pair just refocuses it. Kinds per dataset: ${KIND_MENU}. ` +
+    'Draw a new view onto the canvas for your user: the chart materializes on the ' +
+    'page (9 kinds across the datasets) and its tool family registers at that ' +
+    'moment — each view you create brings its own tools online, so your action ' +
+    'space grows. The SAME dataset can be drawn as multiple kinds at once (e.g. ' +
+    'temp-anomaly as a line AND as stripes) — idempotent per (dataset, kind) pair; ' +
+    `re-asking an existing pair just refocuses it. Kinds per dataset: ${KIND_MENU}. ` +
     'Kind defaults to the dataset’s canonical form.',
   inputSchema: {
     type: 'object',
@@ -271,18 +275,19 @@ const createView: ToolDef = {
 const clearWorkspaceTool: ToolDef = {
   name: 'clear_workspace',
   description:
-    'Tear every commissioned view down: unregisters all chart tool families, ' +
-    'clears focus, and returns the screen to the raw data shelf. The globals ' +
-    '(this tool included) stay. Ask create_view to start again.',
+    'Tear every commissioned view down for your user: unregisters all chart tool ' +
+    'families, clears focus, and returns the page to the publication — the four ' +
+    'deep dataset tables. The globals (this tool included) stay. Ask create_view ' +
+    'to start again.',
   inputSchema: EMPTY_OBJECT_SCHEMA,
   execute: () => {
     const had = getWorkspaceIds()
     clearWorkspace()
     const speech = had.length
       ? `Cleared ${had.length} view${had.length === 1 ? '' : 's'} (${had.join(', ')}) — their tool families are ` +
-        `unregistered and the screen is back to the raw shelf: ${TOTAL_ROWS.toLocaleString('en-US')} rows, zero answers. ` +
+        `unregistered and the page is back to the publication: ${TOTAL_ROWS.toLocaleString('en-US')} rows, zero answers. ` +
         'Ask create_view to commission a fresh view.'
-      : 'The workspace was already empty — you are looking at the raw shelf. Ask create_view to commission a view.'
+      : 'The workspace was already empty — the page shows the publication. Ask create_view to commission a view.'
     return {
       speech,
       data: { ok: true, cleared: had },
@@ -323,7 +328,7 @@ const focusChart: ToolDef = {
     if (!isCommissioned(chartId)) {
       return {
         speech:
-          `${chart.title} has not been commissioned — it is still raw rows on the shelf. ` +
+          `${chart.title} has not been commissioned — it is still deep rows in the publication. ` +
           `Call create_view {"dataset":"${chartId}"} and its chart plus tools will come online.`,
         data: { ok: false, commissioned: getWorkspaceIds() },
       }

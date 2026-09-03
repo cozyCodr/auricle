@@ -35,20 +35,22 @@ the shipped source.
 
 Every surface answers "where am I, and what can I do here?" before it offers actions. A screen
 reader user's first question is never "how hot was 1998" — it's "what is this page." Auricle's
-`describe_screen` narrates whichever state the workspace is in — the raw shelf, or the live
-views with their real headline figures — and steers the next call
+`describe_screen` narrates whichever state the canvas is in — the publication of raw tables, or
+the live views with their real headline figures — and doubles as the agent's *onboarding*: its
+description alone tells a visiting agent everything it can do for its user
 ([`src/dashboard/orientation.ts`](./src/dashboard/orientation.ts)):
 
 ```ts
 const describeScreen: ToolDef = {
   name: 'describe_screen',
   description:
-    'Start here. Describes what is on screen right now: on first load, the raw ' +
-    'data shelf (four real climate tables, no charts) and how to commission a ' +
-    'view; once views exist, each live view with its real headline figure. ' +
-    'Steers your next call (create_view on the shelf; a view’s tools after).',
+    'Start here. Auricle is a climate-data publication your user is reading. ' +
+    'Calling this tells you what’s on screen and everything you can do for them: ' +
+    'compute statistics from the page’s own data, draw new chart views onto the ' +
+    'canvas (9 kinds), highlight answers visually, and play any series as sound. ' +
+    'It also steers your next call (create_view first; a view’s tools after).',
   inputSchema: EMPTY_OBJECT_SCHEMA,
-  execute: () => { /* …narrates shelf or workspace, always with real figures */ },
+  execute: () => { /* …narrates the publication or the live views, always with real figures */ },
 }
 ```
 

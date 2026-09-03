@@ -91,9 +91,9 @@ async function main() {
   assert.equal(registry.focused, null, 'boot: nothing focused')
 
   const shelfSpeech = await exec('describe_screen')
-  assert.ok(shelfSpeech.includes('Zero answers'), 'shelf describe_screen says "Zero answers"')
-  assert.ok(shelfSpeech.includes('create_view'), 'shelf describe_screen steers to create_view')
-  assert.ok(/\d/.test(shelfSpeech), 'shelf describe_screen carries real row counts')
+  assert.ok(shelfSpeech.includes('Zero answers'), 'publication describe_screen says "Zero answers"')
+  assert.ok(shelfSpeech.includes('create_view'), 'publication describe_screen steers to create_view')
+  assert.ok(/\d/.test(shelfSpeech), 'publication describe_screen carries real row counts')
 
   // 2. create_view(temp-anomaly): view + family born at runtime.
   const tempFamily = toolNamesFor('temp-anomaly')
@@ -141,14 +141,14 @@ async function main() {
   const wsSpeech = await exec('describe_screen')
   assert.ok(wsSpeech.includes('2 live views'), `describe_screen lists 2 live views — got: ${wsSpeech}`)
 
-  // 5. clear_workspace: back to the shelf.
+  // 5. clear_workspace: back to the publication.
   const cleared = await exec('clear_workspace')
-  assert.ok(cleared.includes('raw shelf'), 'clear_workspace narrates the return to the shelf')
+  assert.ok(cleared.includes('publication'), 'clear_workspace narrates the return to the publication')
   assert.deepEqual(await toolNames(), GLOBALS, 'after clear: ONLY globals remain')
   assert.equal(getWorkspace().length, 0, 'after clear: workspace empty')
   assert.equal(registry.focused, null, 'after clear: nothing focused')
   const shelfAgain = await exec('describe_screen')
-  assert.ok(shelfAgain.includes('Zero answers'), 'describe_screen is back to the shelf story')
+  assert.ok(shelfAgain.includes('Zero answers'), 'describe_screen is back to the publication story')
 
   // 6. GRAPH VARIETY (P0-01b): same dataset, multiple kinds, ONE family.
   const tempFamily2 = toolNamesFor('temp-anomaly')
@@ -198,7 +198,7 @@ async function main() {
   console.log(
     '\nok — workspace arc: boot=globals-only, create_view births view+family (idempotent per ' +
       '(dataset, kind) pair), multiple kinds of one dataset share ONE family, the family dies ' +
-      'with its LAST view, focus swaps families, clear_workspace tears it all back to the shelf.',
+      'with its LAST view, focus swaps families, clear_workspace tears it all back to the publication.',
   )
 }
 

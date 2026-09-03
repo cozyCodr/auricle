@@ -46,10 +46,21 @@ export interface Emitter {
   readonly year: number
   readonly value: number
 }
-/** OWID/Global Carbon Budget: global yearly series + latest-year top emitters. */
+/** One economy's FULL annual emissions series (million tonnes CO₂ per year). */
+export interface CountrySeries {
+  readonly country: string
+  readonly code: string
+  readonly series: readonly YearPoint[]
+}
+/**
+ * OWID/Global Carbon Budget: global yearly series, latest-year values for the
+ * ten biggest emitting economies, and each economy's full annual series (the
+ * deep per-country-per-year table).
+ */
 export interface EmittersData extends DataEnvelope {
   readonly global_series: readonly YearPoint[]
   readonly emitters_latest: readonly Emitter[]
+  readonly country_series: readonly CountrySeries[]
 }
 
 /** One country in the wealth↔carbon scatter: x = GDP/capita, y = t CO₂/capita. */

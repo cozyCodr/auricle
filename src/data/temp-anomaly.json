@@ -1,7 +1,7 @@
 {
   "source": "NASA GISS Surface Temperature Analysis (GISTEMP v4), annual global mean",
   "source_url": "https://data.giss.nasa.gov/gistemp/tabledata_v4/GLB.Ts+dSST.csv",
-  "fetched_at": "2026-09-03T12:08:43.860Z",
+  "fetched_at": "2026-09-03T13:20:48.184Z",
   "unit": "°C anomaly vs the 1951–1980 average",
   "note": "Annual (J-D) global mean land–ocean temperature anomaly, 1880–2025. The 19th-century readings sit around −0.2 °C; the curve crosses zero in the late 1970s and accelerates, peaking at +1.28 °C in 2024 — the warmest year in the instrumental record. Incomplete years are omitted, not estimated.",
   "points": [

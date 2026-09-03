@@ -10,7 +10,7 @@
   min-height: 100svh;
 }
 
-/* Visually-hidden but screen-reader-available (page <h1>, rail heading). */
+/* Visually-hidden but screen-reader-available (page <h1>, tool-speech live region). */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -109,7 +109,7 @@
   }
 }
 
-/* The blinking live square + the rail's waiting caret. */
+/* The blinking live square (live-feed indicator). */
 @keyframes blink-square {
   0%,
   55% {
@@ -120,14 +120,20 @@
     opacity: 0.15;
   }
 }
-@keyframes blink-caret {
-  0%,
-  55% {
-    opacity: 1;
-  }
-  56%,
-  100% {
+
+/* Publication cards leaving: fade + drift up as the dashboard takes the canvas. */
+@keyframes card-out {
+  to {
     opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+/* Dashboard leaving: a quick fade + settle as the cards return. */
+@keyframes dash-out {
+  to {
+    opacity: 0;
+    transform: translateY(10px);
   }
 }
 
@@ -155,79 +161,6 @@
   color: var(--muted);
 }
 
-.masthead__controls {
-  margin-left: auto;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.masthead__sep {
-  color: var(--muted);
-}
-
-/* Plain-text controls with underline emphasis — no boxes, no pills. */
-button.masthead__control {
-  appearance: none;
-  border: 0;
-  background: none;
-  padding: 0 0 1px;
-  margin: 0;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-button.masthead__control:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 3px;
-}
-
-/* The actionable control reads ink + 2px underline (mockup's "Ask by voice"). */
-button.masthead__sound:not(.masthead__sound--on),
-button.masthead__voice:not(.masthead__voice--active):not(.masthead__voice--denied) {
-  color: var(--ink);
-  font-weight: 600;
-  border-bottom: 2px solid var(--ink);
-}
-
-button.masthead__sound--on {
-  color: var(--muted);
-  cursor: default;
-}
-
-button.masthead__voice--active {
-  color: var(--red-accent);
-  font-weight: 600;
-  border-bottom: 2px solid var(--red-accent);
-}
-
-button.masthead__voice--denied {
-  color: var(--faint);
-}
-
-.masthead__control-label {
-  display: inline-block;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  vertical-align: bottom;
-}
-
-.masthead__live-square {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin-right: 6px;
-  background: var(--red-accent);
-  animation: blink-square 1.1s step-end infinite;
-}
-
 /* ================= The stripes identity band ================= */
 /* Decorative identity art computed from the REAL anomaly data (see App.tsx).
    Wipes in bottom-up, staggered left-to-right; instant under reduced motion. */
@@ -250,13 +183,13 @@ button.masthead__voice--denied {
 }
 
 /* ================= Main / layout ================= */
+/* Full-width publication — no rail, no chat chrome. */
 
 .app-main {
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: stretch;
-  gap: 0;
+  flex-direction: column;
 }
 
 .charts-col {
@@ -266,6 +199,42 @@ button.masthead__voice--denied {
   display: flex;
   flex-direction: column;
   gap: 22px;
+}
+
+/* The whole dashboard fades down while the cards return (clear_workspace). */
+.charts-col--leaving {
+  animation: dash-out 0.36s ease forwards;
+  pointer-events: none;
+}
+
+/* View wrapper: the chart section + its one-line provenance footnote. */
+.view {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* Provenance — the call that made this view, editorial-footnote style: one
+   mono line, muted, clamped with an ellipsis. Not a chat. */
+.provenance {
+  margin: 8px 0 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: fade-up 0.4s ease 0.25s backwards;
+}
+
+.provenance__call {
+  color: var(--gold-ink);
+}
+
+.provenance__result {
+  color: var(--faint);
 }
 
 /* Secondary views: a row of smaller sections divided by hairlines. */
@@ -290,6 +259,7 @@ button.masthead__voice--denied {
   padding-left: 0;
 }
 
+.charts-row [role='listitem'] > .view,
 .charts-row [role='listitem'] > .card {
   width: 100%;
 }
@@ -919,323 +889,71 @@ button.masthead__voice--denied {
   font-size: 12.5px;
 }
 
-/* ================= The footnote rail ================= */
+/* ================= Colophon (the slim footer) ================= */
+/* Sources line + the "Enable sound" text control, above nothing else. */
 
-.rail {
-  width: 372px;
+.colophon {
   flex-shrink: 0;
-  border-left: 2px solid var(--ink);
-  background: var(--surface-alt);
-  padding: 26px 30px 20px;
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 12px 44px 16px;
+  border-top: 2px solid var(--ink);
 }
 
-.rail__heading {
+.colophon__sources {
   margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 11.5px;
   color: var(--faint);
 }
 
-.rail__heading--sub {
-  font-size: 11px;
-}
-
-/* The question as a serif-italic pull-quote. */
-.rail-quote {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 20px;
-  line-height: 1.4;
-  color: var(--ink);
-}
-
-.rail-quote--waiting {
-  color: var(--faint);
-}
-
-.rail-caret {
-  color: var(--ink);
-  animation: blink-caret 1.1s step-end infinite;
-}
-
-/* The answer as body text, a thin rule above. */
-.rail-a {
-  border-top: 1px solid var(--border-soft);
-  padding-top: 14px;
-}
-
-.rail-a__text {
-  margin: 0;
-  font-size: 14.5px;
-  line-height: 1.65;
-  color: var(--ink);
-}
-
-.rail-a__text--empty {
-  color: var(--faint);
-  font-size: 12.5px;
-}
-
-/* Site Tools status + first-run guidance — plain text, no card. */
-.rail-agent {
-  border-top: 1px solid var(--border-soft);
-  padding-top: 12px;
-}
-
-.rail-agent__status {
-  margin: 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.rail-agent--ready .rail-agent__status {
-  color: var(--red-accent);
-}
-
-.rail-agent__body {
-  margin: 6px 0 0;
-  font-size: 12.5px;
-  line-height: 1.55;
-  color: var(--muted);
-}
-
-.rail-agent__prompt {
-  margin: 10px 0 0;
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--muted);
-}
-
-.rail-agent__prompt strong {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-/* Typed WebMCP rehearsal — editorial: hairline input, underlined button. */
-.rail-ask {
-  display: grid;
-  gap: 7px;
-  border-top: 1px solid var(--border-soft);
-  padding-top: 12px;
-}
-
-.rail-ask__label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--faint);
-}
-
-.rail-ask__row {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-}
-
-.rail-ask__input {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 0;
+/* Plain-text control with underline emphasis — no box, no pill. */
+button.colophon__sound {
+  appearance: none;
   border: 0;
-  border-bottom: 1px solid var(--border-soft);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
+  background: none;
+  padding: 0 0 1px;
+  margin: 0;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--ink);
+  border-bottom: 2px solid var(--ink);
+  white-space: nowrap;
 }
 
-.rail-ask__input::placeholder {
-  color: var(--faint);
-  font-style: italic;
-}
-
-.rail-ask__input:focus-visible {
-  outline: none;
-  border-bottom-color: var(--ink);
-  box-shadow: 0 1px 0 var(--ink);
-}
-
-.rail-ask__button:focus-visible {
+button.colophon__sound:focus-visible {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
 
-.rail-ask__button {
-  appearance: none;
-  padding: 0 0 1px;
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  border-radius: 0;
-  background: transparent;
-  color: var(--ink);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.rail-ask__button:disabled,
-.rail-ask__input:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.rail-ask__hint {
-  margin: 0;
-  color: var(--faint);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-/* Sonification equalizer — shown in the answer while a chart plays. */
-.rail-sonify {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 22px;
-  margin-top: 10px;
-}
-
-.rail-sonify span {
-  width: 4px;
-  height: 30%;
-  background: var(--red-accent);
-  animation: sonify-bar 0.62s ease-in-out infinite alternate;
-}
-
-@keyframes sonify-bar {
-  0% {
-    height: 15%;
-    opacity: 0.55;
-  }
-  100% {
-    height: 100%;
-    opacity: 1;
-  }
-}
-
-/* Reduced-motion fallback: a static "playing…" label (audio still plays). */
-.rail-sonify--static {
-  display: block;
-  height: auto;
-  margin: 10px 0 0;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--red-accent);
-}
-
-/* Tool-call log — footnote lines: mono call + plain result, hairline rules. */
-.rail-log {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  border-top: 1px solid var(--border-soft);
-  padding-top: 12px;
-}
-
-.rail-log__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-}
-
-.rail-log__item {
-  padding: 7px 0;
-  border-bottom: 1px solid #ececec;
-  font-size: 12.5px;
-  line-height: 1.5;
+button.colophon__sound--on {
   color: var(--muted);
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0 4px;
-  overflow: hidden;
-  animation: fade-up 0.35s ease backwards;
+  font-weight: 400;
+  border-bottom-color: transparent;
+  cursor: default;
 }
 
-.rail-log__item:last-child {
-  border-bottom: 0;
-}
 
-.rail-log__call {
-  flex-shrink: 0;
-  max-width: 100%;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  color: var(--red-accent);
-  overflow-wrap: anywhere;
-}
+/* ================= The publication (initial state) ================= */
+/* Four dataset cards: serif title, source line, real description, and the
+   FULL table scrolling inside the card. No commissioning affordances — to a
+   human this is a publication; the workbench is the agent's secret. */
 
-.rail-log__arrow {
-  flex-shrink: 0;
-  color: var(--faint);
-}
-
-/* Speech result: clamp to a single line, full text in the title attr. */
-.rail-log__result {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rail-log__empty {
-  font-size: 12px;
-  color: var(--faint);
-  font-style: italic;
-}
-
-/* Pinned credo block + sources line, above a 2px ink rule. */
-.rail-credo {
-  margin-top: auto;
-  border-top: 2px solid var(--ink);
-  padding-top: 12px;
-}
-
-.rail-credo__text {
-  margin: 0;
-  font-size: 12.5px;
-  line-height: 1.6;
-  color: #333333;
-}
-
-.rail-credo__sources {
-  margin: 8px 0 0;
-  font-size: 11.5px;
-  color: var(--faint);
-}
-
-/* ================= The raw data shelf (initial state) ================= */
-
-.shelf {
+.pub {
   flex: 1;
   min-width: 0;
-  padding: 24px 44px 20px;
+  padding: 26px 44px 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 22px;
   min-height: 0;
 }
 
-.shelf__lede {
+.pub__lede {
   display: flex;
   align-items: baseline;
   gap: 24px;
@@ -1243,7 +961,7 @@ button.masthead__voice--denied {
   animation: view-in 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) 0.5s backwards;
 }
 
-.shelf__headline {
+.pub__headline {
   margin: 0;
   font-family: var(--font-serif);
   font-weight: 400;
@@ -1251,7 +969,7 @@ button.masthead__voice--denied {
   line-height: 1.15;
 }
 
-.shelf__sub {
+.pub__sub {
   margin: 0;
   font-size: 14px;
   color: var(--muted);
@@ -1260,73 +978,61 @@ button.masthead__voice--denied {
   min-width: 260px;
 }
 
-.shelf__grid {
+/* 2×2 at width — the cards are substantial; stacks at narrow widths below. */
+.pub__grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 22px;
-  flex: 1;
-  min-height: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 30px 44px;
   align-items: start;
 }
 
-.shelf__dataset {
+.pub-card {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  border-top: 2px solid var(--ink);
+  padding-top: 12px;
+  animation: view-in 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) backwards;
 }
 
-/* Header is a real button styled as an editorial header: bold title + muted
-   meta over a 2px ink rule. Clicking commissions the canonical view. */
-.shelf__dataset-head {
-  appearance: none;
-  background: none;
-  border: 0;
-  border-bottom: 2px solid var(--ink);
-  border-radius: 0;
-  padding: 0 0 6px;
+.pub-card__title {
   margin: 0;
-  text-align: left;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-  color: var(--ink);
-}
-
-.shelf__dataset-head:hover .shelf__dataset-title {
-  border-bottom: 2px solid var(--red-accent);
-}
-
-.shelf__dataset-head:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 3px;
-}
-
-.shelf__dataset-title {
-  font-weight: 600;
-  padding-bottom: 1px;
-}
-
-.shelf__dataset-meta {
+  font-family: var(--font-serif);
   font-weight: 400;
+  font-size: 25px;
+  line-height: 1.2;
+}
+
+.pub-card__source {
+  margin: 4px 0 0;
+  font-size: 12px;
   color: var(--faint);
 }
 
-.shelf__dataset-meta--live {
+.pub-card__live {
   color: var(--red-accent);
   font-weight: 600;
 }
 
-.shelf__dataset .datatable {
-  margin-top: 6px;
-  max-height: 56vh;
-  border-top: 0;
-  border-bottom: 0;
+.pub-card__desc {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-width: 72ch;
 }
 
-/* On the shelf the editorial header IS the caption — clip the table's own
-   caption visually (it stays in the accessibility tree). */
-.shelf__dataset .datatable__caption {
+/* The deep table: ALL rows, internal scroll, sticky header (datatable base). */
+.pub-card .datatable {
+  margin-top: 12px;
+  max-height: 460px;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+/* The card header IS the caption — clip the table's own caption visually
+   (it stays in the accessibility tree for screen readers). */
+.pub-card .datatable__caption {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1336,24 +1042,41 @@ button.masthead__voice--denied {
   white-space: nowrap;
 }
 
-/* ================= Responsive ================= */
-
-/* Stack the rail under the charts below 1200px. */
-@media (max-width: 1200px) {
-  .app-main {
-    flex-direction: column;
-  }
-  .rail {
-    width: auto;
-    border-left: 0;
-    border-top: 2px solid var(--ink);
-  }
+/* Cards leaving: staggered fade/drift-up while the commissioned view is born.
+   The per-card delays mirror the entrance stagger (inline animationDelay is
+   overridden here so exits start together but ripple slightly). */
+.pub--leaving .pub__lede {
+  animation: card-out 0.32s ease forwards;
 }
+
+.pub--leaving .pub-card {
+  animation: card-out 0.4s cubic-bezier(0.4, 0, 0.7, 0.4) forwards;
+  animation-delay: 0s !important; /* overrides the inline entrance stagger */
+}
+
+.pub--leaving .pub-card:nth-child(2) {
+  animation-delay: 0.05s !important;
+}
+
+.pub--leaving .pub-card:nth-child(3) {
+  animation-delay: 0.1s !important;
+}
+
+.pub--leaving .pub-card:nth-child(4) {
+  animation-delay: 0.15s !important;
+}
+
+.pub--leaving {
+  pointer-events: none;
+}
+
+/* ================= Responsive ================= */
 
 @media (max-width: 1100px) {
   .masthead,
   .charts-col,
-  .shelf {
+  .pub,
+  .colophon {
     padding-left: 28px;
     padding-right: 28px;
   }
@@ -1370,16 +1093,18 @@ button.masthead__voice--denied {
   }
 }
 
-@media (max-width: 980px) {
-  .shelf__grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+/* The publication stacks to one column at narrow widths. */
+@media (max-width: 880px) {
+  .pub__grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* ================= Reduced motion: everything stilled ================= */
 /* Every animation above lands on its base (final) styles when disabled —
    keyframes only define `from` states — so `animation: none` is instant-on.
-   Sonification AUDIO is unaffected (the rail renders a static label). */
+   The cards↔dashboard exit stages are also skipped in JS (App's stage
+   machine), so the swap is instant. Sonification AUDIO is unaffected. */
 @media (prefers-reduced-motion: reduce) {
   .stripes-band span,
   .stripes__col,
@@ -1399,21 +1124,18 @@ button.masthead__voice--denied {
   .stat--flash,
   .card--hero,
   .charts-row [role='listitem'],
-  .shelf__lede,
-  .rail-log__item,
+  .charts-col--leaving,
+  .pub__lede,
+  .pub-card,
+  .pub--leaving .pub__lede,
+  .pub--leaving .pub-card,
+  .provenance,
   .livefeed__num,
-  .livefeed__dot,
-  .masthead__live-square,
-  .rail-caret {
+  .livefeed__dot {
     animation: none !important;
   }
   .card__focus,
   .card__focus-hint {
     transition: none;
-  }
-  /* The rail renders a static label here, but never animate bars regardless. */
-  .rail-sonify span {
-    animation: none;
-    height: 60%;
   }
 }

@@ -102,12 +102,26 @@ async function buildTempAnomaly() {
 }
 
 // --------------------------------------------------------------------------
-// 2. CO₂ emitters — OWID annual fossil CO₂: global total series + latest-year
-//    values for the six biggest emitting economies. The grapher "filtered" CSV
-//    keeps the download tiny (vs the ~60 MB full owid-co2-data.csv).
+// 2. CO₂ emitters — OWID annual fossil CO₂: global total series, FULL annual
+//    series for the ten biggest emitting economies (per-country-per-year rows),
+//    and their latest-year values. The grapher "filtered" CSV keeps the
+//    download tiny (vs the ~60 MB full owid-co2-data.csv).
 // --------------------------------------------------------------------------
 
-const EMITTER_ENTITIES = "CHN~USA~IND~OWID_EU27~RUS~JPN~OWID_WRL";
+/** The ten biggest emitting economies (selection is editorial; data fetched). */
+const EMITTER_NAMES: Record<string, string> = {
+  CHN: "China",
+  USA: "United States",
+  IND: "India",
+  OWID_EU27: "EU-27",
+  RUS: "Russia",
+  JPN: "Japan",
+  IRN: "Iran",
+  SAU: "Saudi Arabia",
+  IDN: "Indonesia",
+  DEU: "Germany",
+};
+const EMITTER_ENTITIES = [...Object.keys(EMITTER_NAMES), "OWID_WRL"].join("~");
 const OWID_EMITTERS_CSV =
   "https://ourworldindata.org/grapher/annual-co2-emissions-per-country.csv" +
   `?csvType=filtered&useColumnShortNames=true&country=${EMITTER_ENTITIES}`;
@@ -118,36 +132,43 @@ async function buildEmitters() {
 
   const toMt = (t: string) => Math.round(Number(t) / 1e6); // tonnes → million tonnes
 
-  const world = rows
-    .filter((r) => r.code === "OWID_WRL" && Number(r.year) >= 1850 && r.emissions_total)
-    .map((r) => ({ x: Number(r.year), y: toMt(r.emissions_total) }))
-    .sort((a, b) => a.x - b.x);
+  const seriesFor = (code: string) =>
+    rows
+      .filter((r) => r.code === code && Number(r.year) >= 1850 && r.emissions_total)
+      .map((r) => ({ x: Number(r.year), y: toMt(r.emissions_total) }))
+      .filter((p) => Number.isFinite(p.y))
+      .sort((a, b) => a.x - b.x);
+
+  const world = seriesFor("OWID_WRL");
   if (world.length < 100) throw new Error(`world CO₂ series too short (${world.length} years)`);
 
   const latestYear = world[world.length - 1].x;
-  const NAME_SHORT: Record<string, string> = {
-    CHN: "China",
-    USA: "United States",
-    IND: "India",
-    OWID_EU27: "EU-27",
-    RUS: "Russia",
-    JPN: "Japan",
-  };
-  const emitters = Object.keys(NAME_SHORT)
-    .map((code) => {
-      const r = rows
-        .filter((row) => row.code === code && row.emissions_total)
-        .sort((a, b) => Number(a.year) - Number(b.year))
-        .at(-1);
-      if (!r) throw new Error(`no emissions rows for ${code}`);
-      return { country: NAME_SHORT[code], code, year: Number(r.year), value: toMt(r.emissions_total) };
+
+  // Full annual series per country — the deep per-country-per-year table.
+  const countrySeries = Object.keys(EMITTER_NAMES).map((code) => {
+    const series = seriesFor(code);
+    if (series.length < 30) throw new Error(`series for ${code} too short (${series.length})`);
+    return { country: EMITTER_NAMES[code], code, series };
+  });
+
+  // Latest-year value per country, ranked descending (bars/hbar/share views).
+  const emitters = countrySeries
+    .map(({ country, code, series }) => {
+      const last = series[series.length - 1];
+      return { country, code, year: last.x, value: last.y };
     })
     .sort((a, b) => b.value - a.value);
 
+  const countryRows = countrySeries.reduce((n, c) => n + c.series.length, 0);
+  const totalRows = countryRows + world.length;
   const worldLast = world[world.length - 1];
   console.log(
     `      world ${worldLast.y.toLocaleString()} Mt in ${worldLast.x}; top emitter ${emitters[0].country} ` +
     `${emitters[0].value.toLocaleString()} Mt (${emitters[0].year})`,
+  );
+  console.log(
+    `      ${countrySeries.length} country series (${countryRows.toLocaleString()} country-year rows) + ` +
+    `${world.length} world rows = ${totalRows.toLocaleString()} rows`,
   );
 
   await write("co2-emitters.json", {
@@ -157,65 +178,75 @@ async function buildEmitters() {
     unit: "million tonnes of CO₂ per year (fossil fuels + industry)",
     note:
       `Global fossil CO₂ emissions ${world[0].x}–${latestYear}: from ~${world[0].y.toLocaleString()} Mt in ${world[0].x} ` +
-      `to a record ${worldLast.y.toLocaleString()} Mt in ${worldLast.x} — still rising. The latest-year bars rank the six ` +
-      `biggest emitting economies; ${emitters[0].country} alone emits ${emitters[0].value.toLocaleString()} Mt, ` +
-      `more than the next two combined.`,
+      `to a record ${worldLast.y.toLocaleString()} Mt in ${worldLast.x} — still rising. Full annual series for the ten ` +
+      `biggest emitting economies (${totalRows.toLocaleString()} country-year rows incl. the world series); ` +
+      `${emitters[0].country} alone emits ${emitters[0].value.toLocaleString()} Mt, more than the next two combined. ` +
+      `EU-27 is listed as a bloc, so Germany appears both alone and inside it.`,
     global_series: world,
     emitters_latest: emitters,
+    country_series: countrySeries,
   });
 }
 
 // --------------------------------------------------------------------------
-// 3. Scatter — GDP per capita vs CO₂ per capita, latest common year, a spread
-//    of ~26 countries across income levels (OWID co2-emissions-vs-gdp grapher).
-//    Country SELECTION is editorial; every value is fetched, never typed in.
+// 3. Scatter — GDP per capita vs CO₂ per capita, latest common year, EVERY
+//    country with both series that year (OWID co2-emissions-vs-gdp grapher).
+//    No editorial selection: every value is fetched, never typed in.
 // --------------------------------------------------------------------------
 
 const OWID_GDP_CSV =
   "https://ourworldindata.org/grapher/co2-emissions-vs-gdp.csv?csvType=full&useColumnShortNames=true";
 
-/** A deliberate spread across income levels (selection, not data). */
-const SCATTER_CODES = [
-  "USA", "CHE", "NOR", "AUS", "CAN", "DEU", "JPN", "KOR", "GBR", "FRA",
-  "POL", "RUS", "CHN", "MEX", "BRA", "TUR", "ZAF", "IDN", "IND", "VNM",
-  "EGY", "NGA", "KEN", "BGD", "PAK", "ETH",
-];
+/** Pearson correlation of paired samples (mirrors src/dashboard/charts.ts). */
+function pearson(xs: number[], ys: number[]): number {
+  const n = xs.length;
+  const mx = xs.reduce((a, b) => a + b, 0) / n;
+  const my = ys.reduce((a, b) => a + b, 0) / n;
+  let cov = 0, sx = 0, sy = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx;
+    const dy = ys[i] - my;
+    cov += dx * dy; sx += dx * dx; sy += dy * dy;
+  }
+  return cov / Math.sqrt(sx * sy);
+}
 
 async function buildWealthCarbon() {
   console.log("[3/4] GDP per capita vs CO₂ per capita (Our World in Data)…");
   const rows = parseCSV(await getText(OWID_GDP_CSV));
-  const wanted = new Set(SCATTER_CODES);
 
-  // Latest year where BOTH values exist for (nearly) every selected country.
+  // Every real country (ISO-3 code — skips OWID_* aggregates like continents),
+  // keyed by year, keeping only rows where BOTH values exist.
   const byYear = new Map<number, Map<string, { country: string; gdp: number; co2: number }>>();
   for (const r of rows) {
-    if (!wanted.has(r.code)) continue;
+    if (!/^[A-Z]{3}$/.test(r.code)) continue;
+    if (!r.gdp_per_capita || !r.emissions_total_per_capita) continue;
     const gdp = Number(r.gdp_per_capita);
     const co2 = Number(r.emissions_total_per_capita);
-    if (!r.gdp_per_capita || !r.emissions_total_per_capita) continue;
     if (!Number.isFinite(gdp) || !Number.isFinite(co2)) continue;
     const year = Number(r.year);
     if (!byYear.has(year)) byYear.set(year, new Map());
     byYear.get(year)!.set(r.code, { country: r.entity, gdp, co2 });
   }
+  // Latest year with at least 100 countries carrying both series.
   const year = [...byYear.entries()]
-    .filter(([, m]) => m.size >= SCATTER_CODES.length - 2)
+    .filter(([, m]) => m.size >= 100)
     .map(([y]) => y)
     .sort((a, b) => b - a)[0];
-  if (!year) throw new Error("no common year with GDP + CO₂ per capita for the selected countries");
+  if (!year) throw new Error("no year with 100+ countries carrying both GDP and CO₂ per capita");
 
   const m = byYear.get(year)!;
-  const points = SCATTER_CODES
-    .filter((code) => m.has(code))
-    .map((code) => {
-      const v = m.get(code)!;
-      return { country: v.country, code, x: Math.round(v.gdp), y: Number(v.co2.toFixed(2)) };
-    })
+  const points = [...m.entries()]
+    .map(([code, v]) => ({ country: v.country, code, x: Math.round(v.gdp), y: Number(v.co2.toFixed(2)) }))
     .sort((a, b) => a.x - b.x);
-  if (points.length < 20) throw new Error(`scatter too sparse (${points.length} countries)`);
+  if (points.length < 100) throw new Error(`scatter too sparse (${points.length} countries)`);
 
+  const r = pearson(points.map((p) => p.x), points.map((p) => p.y));
   const top = points.reduce((mx, p) => (p.y > mx.y ? p : mx));
-  console.log(`      ${points.length} countries, year ${year}; highest per-capita ${top.country} ${top.y} t`);
+  console.log(
+    `      ${points.length} countries, year ${year}; highest per-capita ${top.country} ${top.y} t; ` +
+    `Pearson r = ${r.toFixed(3)}`,
+  );
 
   await write("wealth-carbon.json", {
     source: "Our World in Data — CO₂ emissions per capita vs GDP per capita (Global Carbon Budget; Maddison Project)",
@@ -223,9 +254,10 @@ async function buildWealthCarbon() {
     fetched_at: FETCHED_AT,
     unit: "x = GDP per capita (international-$, 2011 prices); y = tonnes CO₂ per person per year",
     note:
-      `${points.length} countries across income levels in ${year} (the latest year with both series). ` +
-      `Wealth and carbon are strongly linked: per-capita emissions run from under 0.5 t in the poorest economies ` +
-      `to ${top.y} t (${top.country}) — but countries at similar incomes differ several-fold, so the link is not destiny.`,
+      `${points.length} countries — every country with both series in ${year}, the latest such year. ` +
+      `Wealth and carbon are strongly linked (Pearson r≈${Number(r.toFixed(2))}): per-capita emissions run from under 0.1 t ` +
+      `in the poorest economies to ${top.y} t (${top.country}) — but countries at similar incomes differ several-fold, ` +
+      `so the link is not destiny.`,
     year,
     x_label: "GDP per capita (international-$)",
     y_label: "CO₂ per capita (t/year)",

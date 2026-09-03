@@ -96,7 +96,8 @@ async function main() {
       ['co2-emitters_compare_emitters', {}, 'bar-emphasis', ['China', '12,289']],
     ],
     'wealth-carbon': [
-      ['wealth-carbon_describe_relationship', {}, 'scatter-ring', ['r≈', '2022']],
+      // 164 countries (the widened dataset) and the REAL recomputed r≈0.78.
+      ['wealth-carbon_describe_relationship', {}, 'scatter-ring', ['r≈0.78', '164', '2022']],
       ['wealth-carbon_query_nearest', { country: 'India' }, 'scatter-ring', ['India', 'GDP']],
     ],
     'co2-live': [

@@ -44,14 +44,23 @@ export const emittersGlobalLine: LinePoint[] = emitters.global_series.map((p) =>
   label: String(p.x),
 }))
 
-export const emitterBars: BarDatum[] = emitters.emitters_latest.map((e, i) => ({
+/**
+ * The vertical-bar comparator keeps the SIX biggest bars (labels stay legible
+ * at bar width); the full ten-economy ranking lives in the hbar view and the
+ * `compare_emitters` tool's narration.
+ */
+export const emitterBars: BarDatum[] = emitters.emitters_latest.slice(0, 6).map((e, i) => ({
   label: e.country,
   value: e.value,
   emphasis: i === 0, // the top emitter carries the outline emphasis
 }))
 
-/** Top emitters ranked descending — the hbar view's rows. */
-export const emitterRanked: BarDatum[] = [...emitterBars].sort((a, b) => b.value - a.value)
+/** ALL ten tracked economies ranked descending — the hbar view's rows. */
+export const emitterRanked: BarDatum[] = emitters.emitters_latest.map((e, i) => ({
+  label: e.country,
+  value: e.value,
+  emphasis: i === 0,
+}))
 
 // --- Share of the REAL global total (the craft-approved pie alternative) -----
 
@@ -69,11 +78,14 @@ const globalLatest = emitters.global_series[emitters.global_series.length - 1]
 /**
  * Each top emitter's share of the REAL global total (value / global latest
  * year), with the remainder as "Rest of world". Shares are computed, never
- * hardcoded — refetch the data and the percentages stay correct.
+ * hardcoded — refetch the data and the percentages stay correct. Germany (DEU)
+ * is EXCLUDED here because it is already counted inside the EU-27 bloc — a
+ * share-of-total bar is additive, so double-counting it would understate the
+ * "Rest of world" remainder. (The non-additive bar/hbar rankings keep both.)
  */
 export const emitterShares: ShareSegment[] = (() => {
-  const named = [...emitters.emitters_latest]
-    .sort((a, b) => b.value - a.value)
+  const named = emitters.emitters_latest
+    .filter((e) => e.code !== 'DEU')
     .map((e) => ({ label: e.country, value: e.value, share: e.value / globalLatest.y }))
   const restValue = globalLatest.y - named.reduce((sum, s) => sum + s.value, 0)
   return [...named, { label: 'Rest of world', value: restValue, share: restValue / globalLatest.y }]
@@ -168,15 +180,26 @@ const TABLES: Record<string, TableModel> = {
     })),
   },
   'co2-emitters': {
-    caption: `Global fossil CO₂ emissions, million tonnes per year, plus latest-year top emitters. Source: ${emitters.source}.`,
+    caption:
+      `Fossil CO₂ emissions, million tonnes per year: the world series plus the full annual ` +
+      `series of the ten biggest emitting economies. Source: ${emitters.source}.`,
     columns: [
+      { key: 'entity', label: 'Economy' },
       { key: 'year', label: 'Year', numeric: true },
-      { key: 'mt', label: 'World Mt CO₂', numeric: true },
+      { key: 'mt', label: 'Mt CO₂', numeric: true },
     ],
-    rows: emitters.global_series.map((p) => ({
-      year: p.x,
-      mt: fmtInt(p.y),
-    })),
+    // World first (1850→latest), then each economy by latest-year rank — the
+    // deep per-country-per-year table (1,600+ real rows).
+    rows: [
+      ...emitters.global_series.map((p) => ({ entity: 'World', year: p.x, mt: fmtInt(p.y) })),
+      ...[...emitters.country_series]
+        .sort(
+          (a, b) =>
+            emitters.emitters_latest.findIndex((e) => e.code === a.code) -
+            emitters.emitters_latest.findIndex((e) => e.code === b.code),
+        )
+        .flatMap((c) => c.series.map((p) => ({ entity: c.country, year: p.x, mt: fmtInt(p.y) }))),
+    ],
   },
   'wealth-carbon': {
     caption: `GDP per capita (international-$) vs CO₂ per capita (t/year), ${wealthCarbon.year}. Source: ${wealthCarbon.source}.`,

@@ -83,12 +83,15 @@ async function main() {
   // Only globals registered at boot — the shelf has no chart surfaces.
   assert.deepEqual(await toolNames(), [...GLOBALS].sort(), 'only the five globals at boot')
 
-  // describe_screen — the shelf story, with real row counts.
+  // describe_screen — the publication story: onboarding copy + real row counts.
   const shelfDesc = await exec('describe_screen')
-  assert.ok(shelfDesc.includes('Zero answers'), 'shelf describe_screen tells the truth: zero answers')
-  assert.ok(shelfDesc.includes('146 rows'), 'shelf describe_screen counts the real GISTEMP rows')
-  assert.ok(shelfDesc.includes('create_view'), 'shelf describe_screen steers to create_view')
-  for (const id of ALL_IDS) assert.ok(shelfDesc.includes(id), `shelf describe_screen names ${id}`)
+  assert.ok(shelfDesc.includes('Zero answers'), 'publication describe_screen tells the truth: zero answers')
+  assert.ok(shelfDesc.includes('publication'), 'describe_screen onboards with the publication framing')
+  assert.ok(shelfDesc.includes('workbench'), 'describe_screen tells the agent the page is its workbench')
+  assert.ok(shelfDesc.includes('146 rows'), 'describe_screen counts the real GISTEMP rows')
+  assert.ok(shelfDesc.includes('1,640 rows'), 'describe_screen counts the widened per-country emissions rows')
+  assert.ok(shelfDesc.includes('create_view'), 'describe_screen steers to create_view')
+  for (const id of ALL_IDS) assert.ok(shelfDesc.includes(id), `describe_screen names ${id}`)
 
   // list_visualizations — all four ids on the shelf, none commissioned.
   const shelfList = await exec('list_visualizations')
@@ -107,7 +110,7 @@ async function main() {
 
   const wsList = await exec('list_visualizations')
   assert.ok(wsList.includes('focused'), 'list_visualizations marks the focused view')
-  assert.ok(wsList.includes('On the shelf'), 'list_visualizations lists the remaining shelf datasets')
+  assert.ok(wsList.includes('Still uncommissioned'), 'list_visualizations lists the uncommissioned datasets')
 
   // focus_chart(temp-anomaly) → globals + temp family; emitters family gone.
   const tempFamilyNames = toolNamesFor('temp-anomaly')

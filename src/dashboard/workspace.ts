@@ -150,7 +150,7 @@ export function removeView(chartId: string, kind: ChartKind): boolean {
 
 /**
  * Clear the workspace: blur focus, unregister every commissioned surface (their
- * tool families disappear from getTools()), and return to the raw shelf.
+ * tool families disappear from getTools()), and return to the publication.
  */
 export function clearWorkspace(): void {
   setFocus(null) // blur → the focused family unregisters
