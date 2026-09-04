@@ -104,10 +104,10 @@ npm run check        # browserless unit checks (registry, workspace arc, tools, 
    *"Show me warming over time."* → the publication yields; a chart is born.
    *"Show it as stripes."* · *"When was the hottest year?"* · *"Play the century as sound."*
    (click **Enable sound** in the footer once first) · *"Start over."*
-   Agent clients that work today: ChatGPT's built-in browser with Site Tools, or the
+   The verified agent path is ChatGPT's built-in browser with Site Tools. For protocol-level
+   development and inspection, the
    [Model Context Tool Inspector](https://github.com/beaufortfrancois/model-context-tool-inspector)
-   extension's natural-language mode — both do the real `getTools()` → reason →
-   `executeTool()` loop against this page.
+   exercises the same `getTools()` → `executeTool()` loop against this page.
 4. Watch `await document.modelContext.getTools()` in DevTools before and after a view is
    commissioned — the chart's tool family registers into existence at runtime.
 

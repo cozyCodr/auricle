@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local planning and hackathon workflow state
+/development-planner.md
+/.devpost-hackathon-state.json
+/SUBMISSION.md
+/devpost-submission.md

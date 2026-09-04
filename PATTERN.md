@@ -214,8 +214,10 @@ user builds the space to fit their own needs, visual or not. The same dataset co
 multiple kinds (a line **and** queryable warming stripes); re-rendering is just another
 `create_view` call; `clear_workspace` tears every family back down to the shelf. A view's tool
 family lives exactly as long as the view it serves — the tool surface never advertises
-capabilities the screen does not have. And the on-page fallback form drives the identical
-handlers through `registry.executeLocal`, so agent and no-agent users compose the same way.
+capabilities the screen does not have. The production page deliberately has no on-page chat
+or fallback form: without a WebMCP agent it remains a semantic climate-data publication. A
+development-only `window.__auricleRunIntent` hook exercises the same registered definitions
+during QA, but it is not presented as a user-facing product path.
 
 ---
 

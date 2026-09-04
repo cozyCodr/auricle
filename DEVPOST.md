@@ -1,6 +1,6 @@
 # Auricle — interview the planet
 
-**Live:** https://auricle-khaki.vercel.app · **Repo:** https://github.com/cozyCodr/auricle · **Video:** [YOUTUBE LINK — replace before submitting]
+**Live:** https://auricle-khaki.vercel.app · **Repo:** https://github.com/cozyCodr/auricle · **Video:** https://youtu.be/YzVK3AfLBdo
 
 This looks like a normal website: a climate-data publication with 2,026 real rows from NASA GISTEMP, NOAA Mauna Loa, and Our World in Data. No chat box, no AI buttons. But it has a secret — it speaks WebMCP. Open it with an agent, and the publication becomes a workbench: the agent computes statistics from the page's own data, draws new chart views onto the canvas, highlights answers, and plays any series as sound. **Every chart on screen exists because someone asked.**
 
@@ -22,4 +22,4 @@ A person and their agent share one canvas: the agent operates, the page performs
 
 ## Tested clients
 
-ChatGPT's in-app browser (Site Tools) — end-to-end; Chrome 152 with `chrome://flags/#enable-webmcp-testing` — end-to-end; a WebMCP-API-driven agent (Claude in Chrome) during development. Fully open source, MIT, builds offline from committed real data (`npm run fetch-data` re-pulls the sources).
+ChatGPT's built-in browser with Site Tools was the AI agent tested end to end. Chrome 152 with `chrome://flags/#enable-webmcp-testing` and the Model Context Tool Inspector was used only as developer tooling for protocol-level registration and execution inspection—not as another agent. Claude and Gemini were not used in the test matrix or recorded demo. Fully open source, MIT, builds offline from committed real data (`npm run fetch-data` re-pulls the sources).
